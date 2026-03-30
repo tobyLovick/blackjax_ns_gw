@@ -70,4 +70,5 @@ src/*
 !src/blackjax_4s.py
 !src/blackjax_injections.py
 !src/example.py
-!src/example_newAPI.py
+!src/example_newAPI.py!src/plot_4s.py
+!src/plot_4s.py
