@@ -352,7 +352,7 @@ def logprior_fn(params):
 
 # Setup for unit cube sampling
 n_live = 1400 #recalibrated to get compression rate roughly the same as bilby
-n_delete = 1  # Testing new vectorized kernel
+n_delete = 700  # 0.5 * n_live, matches paper configuration
 
 rng_key = jax.random.PRNGKey(10)
 rng_key, init_key = jax.random.split(rng_key, 2)
