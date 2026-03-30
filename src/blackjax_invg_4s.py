@@ -241,31 +241,32 @@ def prior_transform_fn(u_params):
     _, unflatten_fn = jax.flatten_util.ravel_pytree(example_params)
     return unflatten_fn(x_values)
 
-def _invg_single_bin(B_i, S0_i, alpha_0):
+def _invg_single_bin(B_i, S0_i, alpha_0, log_two_df_over_pi):
     """
-    Analytic inverse-gamma marginalised log-likelihood for one frequency bin.
+    Fully normalised analytic inverse-gamma marginalised log-likelihood for one bin.
 
     Precision λᵢ = Sᵢ⁻¹ ~ Gamma(α₀, β₀ᵢ)  (shape-rate parametrization).
-    β₀ᵢ = S0_i * (α₀ - 1) centres the prior mean on the off-source PSD:
-      E[Sᵢ] = β₀ᵢ / (α₀ - 1) = S0_i.
+    β₀ᵢ = S0_i·(α₀−1) centres the prior mean on the off-source PSD: E[Sᵢ] = S0_i.
 
-    Analytic marginal (Eq. 7, gw_likelihood_structure.tex):
-      log p = log Γ(α₀+1) - log Γ(α₀) + α₀·log β₀ᵢ - (α₀+1)·log(β₀ᵢ + Bᵢ)
-            = log(α₀)     + α₀·log β₀ᵢ - (α₀+1)·log(β₀ᵢ + Bᵢ)
+    Exact marginal of p(d̃ᵢ|hᵢ,λᵢ)·p(λᵢ|α₀,β₀ᵢ):
+      p(d̃ᵢ|hᵢ,λ) = (2Δf/π)·λ·exp(−Bᵢλ)
+      → log p = log(2Δf/π) + log(α₀) + α₀·log(β₀) − (α₀+1)·log(β₀+Bᵢ)
 
     Parameters
     ----------
-    B_i    : residual power  2·df·|dᵢ - hᵢ|²  (real, >= 0)
-    S0_i   : off-source PSD estimate Ŝᵢ  (not log)
-    alpha_0: shared shape hyperparameter  (> 1 required; > 2 for finite variance)
+    B_i                : residual power  2·Δf·|dᵢ − hᵢ|²  (real, >= 0)
+    S0_i               : off-source PSD estimate Ŝᵢ  (not log)
+    alpha_0            : shared shape hyperparameter  (> 2 for finite variance)
+    log_two_df_over_pi : log(2·Δf/π), data likelihood normalisation (shared across bins)
     """
     beta_0 = S0_i * (alpha_0 - 1.0)
-    return (jnp.log(alpha_0)
+    return (log_two_df_over_pi
+            + jnp.log(alpha_0)
             + alpha_0 * jnp.log(beta_0)
             - (alpha_0 + 1.0) * jnp.log(beta_0 + B_i))
 
-# vmap over bins; alpha_0 is a scalar shared across all bins (not vmapped)
-_invg_bins = jax.vmap(_invg_single_bin, in_axes=(0, 0, None))
+# vmap over bins; alpha_0 and log_two_df_over_pi are scalars broadcast across all bins
+_invg_bins = jax.vmap(_invg_single_bin, in_axes=(0, 0, None, None))
 
 
 def loglikelihood_fn(params):
@@ -278,14 +279,15 @@ def loglikelihood_fn(params):
     waveform_sky = waveform(filtered_frequencies, p)
     align_time   = jnp.exp(-1j * 2 * jnp.pi * filtered_frequencies * (epoch + p["t_c"]))
 
-    df    = filtered_frequencies[1] - filtered_frequencies[0]
+    df                 = filtered_frequencies[1] - filtered_frequencies[0]
+    log_two_df_over_pi = jnp.log(2.0 * df / jnp.pi)
     log_L = 0.0
 
     for det in detectors:
         h_dec = det.fd_response(filtered_frequencies, waveform_sky, p) * align_time
         # Residual power B_i = 2*df * |d_i - h_i|^2  (real, shape: n_bins)
         B     = 2.0 * df * jnp.abs(det.data - h_dec) ** 2
-        log_L = log_L + jnp.sum(_invg_bins(B, det.psd, p["alpha_0"]))
+        log_L = log_L + jnp.sum(_invg_bins(B, det.psd, p["alpha_0"], log_two_df_over_pi))
 
     return log_L
 

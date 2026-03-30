@@ -240,28 +240,27 @@ def prior_transform_fn(u_params):
     _, unflatten_fn = jax.flatten_util.ravel_pytree(example_params)
     return unflatten_fn(x_values)
 
-def _alcs_single_bin(B_i, log_S0_i, tau):
+def _alcs_single_bin(B_i, log_S0_i, tau, log_two_df_over_pi):
     """
-    Laplace-marginalised log-likelihood for one frequency bin.
+    Fully normalised Laplace-marginalised log-likelihood for one frequency bin.
 
-    Marginalises over sigma_tilde_i = 0.5*log(S_i) with log-normal prior
-    centred on the off-source estimate sigma_tilde_0 = 0.5*log(S_hat_i).
+    Computes log ∫ p(d̃ᵢ|hᵢ,σ̃ᵢ) · p(σ̃ᵢ|σ̃₀ᵢ,τ) dσ̃ᵢ via Laplace approximation.
 
-    Steps:
-      1. 5 unrolled Newton steps from warm start sigma_tilde_0  (reuses exp)
-      2. Evaluate log-posterior at MAP sigma_hat
-      3. Free Hessian: H = 4 + (2*(sigma_hat - sigma_tilde_0) + 1) / tau^2
-      4. Laplace correction: +0.5*log(2*pi) - 0.5*log(H)
+    Likelihood: log p(d̃ᵢ|hᵢ,σ̃ᵢ) = log(2Δf/π) − 2σ̃ᵢ − Bᵢe^{−2σ̃ᵢ}
+    Prior:      log p(σ̃ᵢ|τ)       = −½log(2πτ²) − (σ̃ᵢ−σ̃₀ᵢ)²/(2τ²)
+    Laplace:    log ∫ f dσ̃ ≈ log f(σ̂) + ½log(2π/H)
 
     Parameters
     ----------
-    B_i      : residual power  2*df*|d_i - h_i|^2  (real, >= 0)
-    log_S0_i : log of off-source PSD estimate  log(S_hat_i)
+    B_i                : residual power  2·Δf·|dᵢ − hᵢ|²  (real, >= 0)
+    log_S0_i           : log of off-source PSD estimate  log(Ŝᵢ)
+    tau                : log-PSD prior width (shared across bins)
+    log_two_df_over_pi : log(2·Δf/π), data likelihood normalisation (shared across bins)
     """
     tau_sq = tau ** 2
-    s0 = 0.5 * log_S0_i          # warm start = sigma_tilde_0
+    s0 = 0.5 * log_S0_i
 
-    # 5 Newton steps (unrolled — static graph, trivially jax.vmap-able)
+    # 5 unrolled Newton steps to find MAP σ̂
     s = s0
     for _ in range(5):
         e2s = jnp.exp(-2.0 * s)
@@ -269,18 +268,20 @@ def _alcs_single_bin(B_i, log_S0_i, tau):
         fp  = -4.0 * B_i * e2s        - 1.0 / tau_sq
         s   = s - f / fp
 
-    # Log-posterior at MAP (-2*sigma is the -log(S_i) Jacobian term)
-    log_post = (-2.0 * s
-                - B_i * jnp.exp(-2.0 * s)
-                - (s - s0) ** 2 / (2.0 * tau_sq))
+    # Full log f(σ̂) = log p(data|σ̂) + log p(σ̂|prior), all terms
+    log_f = (log_two_df_over_pi                          # likelihood normalisation
+             - 2.0 * s                                   # −log Sᵢ
+             - B_i * jnp.exp(-2.0 * s)                  # −Bᵢ/Sᵢ
+             - 0.5 * jnp.log(2.0 * jnp.pi * tau_sq)     # prior normalisation
+             - (s - s0) ** 2 / (2.0 * tau_sq))           # prior exponent
 
-    # Free Hessian: substitute MAP condition, no extra exp needed
+    # Free Hessian (no extra exp required)
     H = 4.0 + (2.0 * (s - s0) + 1.0) / tau_sq
 
-    return log_post + 0.5 * jnp.log(2.0 * jnp.pi) - 0.5 * jnp.log(H)
+    return log_f + 0.5 * jnp.log(2.0 * jnp.pi / H)
 
-# vmap over bins; tau is a scalar shared across all bins (not vmapped)
-_alcs_bins = jax.vmap(_alcs_single_bin, in_axes=(0, 0, None))
+# vmap over bins; tau and log_two_df_over_pi are scalars broadcast across all bins
+_alcs_bins = jax.vmap(_alcs_single_bin, in_axes=(0, 0, None, None))
 
 
 def loglikelihood_fn(params):
@@ -293,14 +294,15 @@ def loglikelihood_fn(params):
     waveform_sky = waveform(filtered_frequencies, p)
     align_time   = jnp.exp(-1j * 2 * jnp.pi * filtered_frequencies * (epoch + p["t_c"]))
 
-    df    = filtered_frequencies[1] - filtered_frequencies[0]
+    df                 = filtered_frequencies[1] - filtered_frequencies[0]
+    log_two_df_over_pi = jnp.log(2.0 * df / jnp.pi)
     log_L = 0.0
 
     for det in detectors:
         h_dec = det.fd_response(filtered_frequencies, waveform_sky, p) * align_time
         # Residual power B_i = 2*df * |d_i - h_i|^2  (real, shape: n_bins)
         B     = 2.0 * df * jnp.abs(det.data - h_dec) ** 2
-        log_L = log_L + jnp.sum(_alcs_bins(B, jnp.log(det.psd), p["tau"]))
+        log_L = log_L + jnp.sum(_alcs_bins(B, jnp.log(det.psd), p["tau"], log_two_df_over_pi))
 
     return log_L
 
