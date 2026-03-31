@@ -70,5 +70,11 @@ src/*
 !src/blackjax_4s.py
 !src/blackjax_injections.py
 !src/example.py
-!src/example_newAPI.py!src/plot_4s.py
+!src/example_newAPI.py
 !src/plot_4s.py
+
+# GW150914 real-data scripts
+!src/fetch_gw150914.py
+!src/blackjax_gw150914.py
+!src/blackjax_alcs_gw150914.py
+!src/blackjax_invg_gw150914.py
