@@ -3,6 +3,7 @@ import os
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
+import argparse
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -23,6 +24,10 @@ from custom_kernels import (
     transform_to_physical
 )
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--notch", action="store_true", help="Apply spectral line notch mask")
+args = parser.parse_args()
+
 waveform = RippleIMRPhenomD(f_ref=20)
 
 # ---------------------------------------------------------------------------
@@ -35,6 +40,10 @@ for det in detectors:
     det.frequencies = frequencies
     det.data = jnp.array(np.load(f'gw150914_{det.name}_strain.npy'), dtype=jnp.complex128)
     det.psd  = jnp.array(np.load(f'gw150914_{det.name}_psd.npy'),    dtype=jnp.float64)
+    if args.notch:
+        det.mask = jnp.array(np.load(f'gw150914_notch_mask_{det.name}.npy'), dtype=jnp.float64)
+    else:
+        det.mask = jnp.ones(len(frequencies), dtype=jnp.float64)
 
 # ---------------------------------------------------------------------------
 # Helper: determine ravel order of parameter dict
@@ -163,7 +172,7 @@ def loglikelihood_fn(params):
     for det in detectors:
         h_dec = det.fd_response(frequencies, waveform_sky, p) * align_time
         B     = 2.0 * df * jnp.abs(det.data - h_dec) ** 2
-        log_L = log_L + jnp.sum(_invg_bins(B, det.psd, p["alpha_0"], log_two_df_over_pi))
+        log_L = log_L + jnp.dot(_invg_bins(B, det.psd, p["alpha_0"], log_two_df_over_pi), det.mask)
     return log_L
 
 # ---------------------------------------------------------------------------
@@ -277,7 +286,8 @@ column_to_label = {
 
 final_state = finalise(state, dead)
 
-with open('blackjaxns_invg_gw150914_final_state.pkl', 'wb') as f:
+suffix = "_notched" if args.notch else ""
+with open(f'blackjaxns_invg_gw150914{suffix}_final_state.pkl', 'wb') as f:
     pickle.dump(final_state, f)
 
 physical_particles = transform_to_physical(final_state.particles, prior_transform_fn)
@@ -293,6 +303,6 @@ samples = NestedSamples(
     dtype=jnp.float64,
 )
 
-samples.to_csv("blackjaxns_invg_gw150914.csv")
-with open('blackjaxns_invg_gw150914_timings.pkl', 'wb') as f:
+samples.to_csv(f"blackjaxns_invg_gw150914{suffix}.csv")
+with open(f'blackjaxns_invg_gw150914{suffix}_timings.pkl', 'wb') as f:
     pickle.dump(pbar.format_dict, f)

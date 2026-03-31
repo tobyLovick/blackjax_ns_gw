@@ -3,6 +3,7 @@ import os
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
+import argparse
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -14,8 +15,11 @@ import pickle
 jax.config.update("jax_enable_x64", True)
 
 from jimgw.single_event.detector import H1, L1
-from jimgw.single_event.likelihood import original_likelihood as likelihood_function
 from jimgw.single_event.waveform import RippleIMRPhenomD
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--notch", action="store_true", help="Apply spectral line notch mask")
+args = parser.parse_args()
 
 from custom_kernels import (
     acceptance_walk_sampler,
@@ -36,6 +40,10 @@ for det in detectors:
     det.frequencies = frequencies
     det.data = jnp.array(np.load(f'gw150914_{det.name}_strain.npy'), dtype=jnp.complex128)
     det.psd  = jnp.array(np.load(f'gw150914_{det.name}_psd.npy'),    dtype=jnp.float64)
+    if args.notch:
+        det.mask = jnp.array(np.load(f'gw150914_notch_mask_{det.name}.npy'), dtype=jnp.float64)
+    else:
+        det.mask = jnp.ones(len(frequencies), dtype=jnp.float64)
 
 # ---------------------------------------------------------------------------
 # Helper: determine ravel order of parameter dict
@@ -137,7 +145,14 @@ def loglikelihood_fn(params):
     p["eta"]  = p["q"] / (1 + p["q"]) ** 2
     waveform_sky = waveform(frequencies, p)
     align_time   = jnp.exp(-1j * 2 * jnp.pi * frequencies * (epoch + p["t_c"]))
-    return likelihood_function(p, waveform_sky, detectors, frequencies, align_time)
+    df           = frequencies[1] - frequencies[0]
+    log_L = 0.0
+    for det in detectors:
+        h_dec = det.fd_response(frequencies, waveform_sky, p) * align_time
+        match_filter = 4 * df * jnp.dot((jnp.conj(h_dec) * det.data / det.psd).real, det.mask)
+        optimal      = 2 * df * jnp.dot(jnp.abs(h_dec)**2 / det.psd, det.mask)
+        log_L += match_filter - optimal
+    return log_L
 
 # ---------------------------------------------------------------------------
 # Prior log-probabilities
@@ -241,7 +256,7 @@ column_to_label = {
 
 final_state = finalise(state, dead)
 
-with open('blackjaxns_gw150914_final_state.pkl', 'wb') as f:
+with open(f'blackjaxns_gw150914{suffix}_final_state.pkl', 'wb') as f:
     pickle.dump(final_state, f)
 
 physical_particles = transform_to_physical(final_state.particles, prior_transform_fn)
@@ -257,6 +272,9 @@ samples = NestedSamples(
     dtype=jnp.float64,
 )
 
-samples.to_csv("blackjaxns_gw150914.csv")
-with open('blackjaxns_gw150914_timings.pkl', 'wb') as f:
+suffix = "_notched" if args.notch else ""
+samples.to_csv(f"blackjaxns_gw150914{suffix}.csv")
+with open(f'blackjaxns_gw150914{suffix}_final_state.pkl', 'wb') as f:
+    pickle.dump(final_state, f)
+with open(f'blackjaxns_gw150914{suffix}_timings.pkl', 'wb') as f:
     pickle.dump(pbar.format_dict, f)

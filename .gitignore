@@ -78,3 +78,7 @@ src/*
 !src/blackjax_gw150914.py
 !src/blackjax_alcs_gw150914.py
 !src/blackjax_invg_gw150914.py
+!src/plot_all_gw150914.py
+!src/alcs_is_diagnostic.py
+!src/gw150914_notch_mask_H1.npy
+!src/gw150914_notch_mask_L1.npy
