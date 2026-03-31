@@ -294,10 +294,9 @@ column_to_label = {
     "phase_c": r"$\phi_c$",                  "tau":  r"$\tau$",
 }
 
-final_state = finalise(state, dead)
+suffix = "_notched" if args.notch else ""
 
-with open(f'blackjaxns_alcs_gw150914{suffix}_final_state.pkl', 'wb') as f:
-    pickle.dump(final_state, f)
+final_state = finalise(state, dead)
 
 physical_particles = transform_to_physical(final_state.particles, prior_transform_fn)
 
@@ -312,7 +311,6 @@ samples = NestedSamples(
     dtype=jnp.float64,
 )
 
-suffix = "_notched" if args.notch else ""
 samples.to_csv(f"blackjaxns_alcs_gw150914{suffix}.csv")
 with open(f'blackjaxns_alcs_gw150914{suffix}_final_state.pkl', 'wb') as f:
     pickle.dump(final_state, f)
