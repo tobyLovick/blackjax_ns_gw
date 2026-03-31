@@ -70,7 +70,7 @@ param_config = {
     "psi":     {"min": 0.0,          "max": jnp.pi,      "prior": "uniform",     "wraparound": True,  "angle": jnp.pi},
     "ra":      {"min": 0.0,          "max": 2*jnp.pi,    "prior": "uniform",     "wraparound": True,  "angle": 2*jnp.pi},
     "dec":     {"min": -jnp.pi/2,    "max": jnp.pi/2,    "prior": "cosine",      "wraparound": False, "angle": 1.0},
-    "tau":     {"min": 0.001,        "max": 0.5,         "prior": "log_uniform", "wraparound": False, "angle": 1.0},
+    "tau":     {"min": 0.001,        "max": 2.0,         "prior": "log_uniform", "wraparound": False, "angle": 1.0},
 }
 
 sampled_config = {key: param_config[key] for key in sample_keys}
@@ -116,7 +116,7 @@ def powerlaw_transform(u, alpha, min, max):
 
 @jax.jit
 def log_uniform_transform_tau(u):
-    return 0.001 * (0.5 / 0.001) ** u
+    return 0.001 * (2.0 / 0.001) ** u
 
 @jax.jit
 def prior_transform_fn(u_params):
@@ -198,8 +198,8 @@ def powerlaw_logprob(x, alpha, min, max):
 
 @jax.jit
 def log_uniform_logprob_tau(x):
-    return jnp.where((x >= 0.001) & (x <= 0.5),
-                     -jnp.log(x) - jnp.log(0.5 / 0.001),
+    return jnp.where((x >= 0.001) & (x <= 2.0),
+                     -jnp.log(x) - jnp.log(2.0 / 0.001),
                      -jnp.inf)
 
 @jax.jit
