@@ -434,6 +434,7 @@ column_to_label = {
     "t_c": r"$t_c$",
     "psi": r"$\psi$",
     "phase_c": r"$\phi_c$",
+    "tau": r"$\tau$",
 }
 
 final_state = finalise(state, dead)
