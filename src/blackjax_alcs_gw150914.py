@@ -26,6 +26,7 @@ from custom_kernels import (
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--notch", action="store_true", help="Apply spectral line notch mask")
+parser.add_argument("--mask-suffix", type=str, default="", help="Suffix on mask filename, e.g. _t10 or _posterior")
 args = parser.parse_args()
 
 waveform = RippleIMRPhenomD(f_ref=20)
@@ -41,7 +42,7 @@ for det in detectors:
     det.data = jnp.array(np.load(f'gw150914_{det.name}_strain.npy'), dtype=jnp.complex128)
     det.psd  = jnp.array(np.load(f'gw150914_{det.name}_psd.npy'),    dtype=jnp.float64)
     if args.notch:
-        det.mask = jnp.array(np.load(f'gw150914_notch_mask_{det.name}.npy'), dtype=jnp.float64)
+        det.mask = jnp.array(np.load(f'gw150914_notch_mask_{det.name}{args.mask_suffix}.npy'), dtype=jnp.float64)
     else:
         det.mask = jnp.ones(len(frequencies), dtype=jnp.float64)
 
@@ -294,7 +295,7 @@ column_to_label = {
     "phase_c": r"$\phi_c$",                  "tau":  r"$\tau$",
 }
 
-suffix = "_notched" if args.notch else ""
+suffix = ("_notched" + args.mask_suffix) if args.notch else ""
 
 final_state = finalise(state, dead)
 

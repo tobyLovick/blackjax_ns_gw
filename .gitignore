@@ -78,7 +78,39 @@ src/*
 !src/blackjax_gw150914.py
 !src/blackjax_alcs_gw150914.py
 !src/blackjax_invg_gw150914.py
+!src/blackjax_gw150914_norm.py
 !src/plot_all_gw150914.py
+!src/plot_gw150914_data.py
 !src/alcs_is_diagnostic.py
+!src/residuals_diagnostic.py
 !src/gw150914_notch_mask_H1.npy
 !src/gw150914_notch_mask_L1.npy
+!src/gw150914_notch_mask_H1_t10.npy
+!src/gw150914_notch_mask_L1_t10.npy
+!src/gw150914_notch_mask_H1_posterior.npy
+!src/gw150914_notch_mask_L1_posterior.npy
+
+# 4s norm and ALCS scripts
+!src/blackjax_4s_norm.py
+!src/blackjax_alcs_4s.py
+!src/blackjax_invg_4s.py
+
+# Notch mask scripts
+!src/compute_notch_mask.py
+!src/compute_notch_mask_4s.py
+!src/compute_posterior_notch_mask.py
+!src/compute_posterior_notch_mask_4s.py
+
+# 4s notch masks
+!src/4s_notch_mask_H1.npy
+!src/4s_notch_mask_L1.npy
+!src/4s_notch_mask_V1.npy
+!src/4s_notch_mask_H1_t10.npy
+!src/4s_notch_mask_L1_t10.npy
+!src/4s_notch_mask_V1_t10.npy
+!src/4s_notch_mask_H1_posterior.npy
+!src/4s_notch_mask_L1_posterior.npy
+!src/4s_notch_mask_V1_posterior.npy
+
+# SLURM submission script
+!src/submit_all.sh

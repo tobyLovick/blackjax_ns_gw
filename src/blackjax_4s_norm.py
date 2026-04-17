@@ -25,8 +25,6 @@ jax.config.update("jax_enable_x64", True)
 
 # Import gravitational wave functions
 from jimgw.single_event.detector import H1, L1, V1
-from jimgw.single_event.likelihood import phase_marginalized_likelihood as likelihood_function_phase_marginalized
-from jimgw.single_event.likelihood import original_likelihood as likelihood_function
 from jimgw.single_event.waveform import RippleIMRPhenomD
 
 # Import custom BlackJAX nested sampling kernels
@@ -139,7 +137,7 @@ for det in detectors:
         det.mask = jnp.ones(len(filtered_frequencies), dtype=jnp.float64)
 
 # Define sampled parameters (excludes phase_c for phase marginalization)
-sample_keys = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "psi", "ra", "dec", "phase_c", "tau"]
+sample_keys = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "psi", "ra", "dec", "phase_c"]
 
 # Get sample_keys in correct ravel order
 test_particles = {}
@@ -161,8 +159,7 @@ param_config = {
     "phase_c": {"min": 0.0, "max": 2*jnp.pi, "prior": "uniform", "wraparound": True, "angle": 2*jnp.pi},
     "psi": {"min": 0.0, "max": jnp.pi, "prior": "uniform", "wraparound": True, "angle": jnp.pi},
     "ra": {"min": 0.0, "max": 2*jnp.pi, "prior": "uniform", "wraparound": True, "angle": 2*jnp.pi},
-    "dec": {"min": -jnp.pi/2, "max": jnp.pi/2, "prior": "cosine",    "wraparound": False, "angle": 1.0},
-    "tau": {"min": 0.001,     "max": 0.5,       "prior": "log_uniform", "wraparound": False, "angle": 1.0},
+    "dec": {"min": -jnp.pi/2, "max": jnp.pi/2, "prior": "cosine", "wraparound": False, "angle": 1.0},
 }
 
 sampled_config = {key: param_config[key] for key in sample_keys}
@@ -172,11 +169,10 @@ n_dims = len(sample_keys)
 param_mins = jnp.array([sampled_config[key]["min"] for key in sample_keys])
 param_maxs = jnp.array([sampled_config[key]["max"] for key in sample_keys])
 param_prior_types = jnp.array([
-    0 if sampled_config[key]["prior"] == "uniform"     else
-    1 if sampled_config[key]["prior"] == "sine"        else
-    2 if sampled_config[key]["prior"] == "cosine"      else
-    3 if sampled_config[key]["prior"] == "powerlaw"    else
-    4 for key in sample_keys
+    0 if sampled_config[key]["prior"] == "uniform" else
+    1 if sampled_config[key]["prior"] == "sine" else
+    2 if sampled_config[key]["prior"] == "cosine" else
+    3 for key in sample_keys
 ])
 
 # Constants for likelihood computation
@@ -188,8 +184,8 @@ gmst = Time(1126259642.413, format="gps").sidereal_time("apparent", "greenwich")
 # Column labels for plotting
 column_to_label = {
     "M_c": r"$M_c$", "q": r"$q$", "d_L": r"$d_L$", "iota": r"$\iota$", "ra": r"$\alpha$",
-    "dec": r"$\delta$", "s1_z": r"$s_{1z}$", "s2_z": r"$s_{2z}$", "t_c": r"$t_c$",
-    "psi": r"$\psi$", "phase_c": r"$\phi_c$", "tau": r"$\tau$",
+    "dec": r"$\delta$", "s1_z": r"$s_{1z}$", "s2_z": r"$s_{2z}$", "t_c": r"$t_c$", 
+    "psi": r"$\psi$", "phase_c": r"$\phi_c$",
 }
 
 # Vectorized prior transforms for unit cube [0,1] -> physical space
@@ -216,20 +212,16 @@ def powerlaw_transform(u, alpha, min, max):
     return (min ** (1+alpha) + u * (max ** (1+alpha) - min ** (1+alpha))) ** (1/(1+alpha))
 
 @jax.jit
-def log_uniform_transform_tau(u):
-    return 0.001 * (0.5 / 0.001) ** u
-
-@jax.jit
 def prior_transform_fn(u_params):
     """Transform unit cube to physical parameters."""
     u_values, _ = jax.flatten_util.ravel_pytree(u_params)
     
     # Apply transforms based on prior type
-    uniform_vals      = uniform_transform(u_values, param_mins, param_maxs)
-    sine_vals         = sine_transform(u_values)
-    cosine_vals       = cosine_transform(u_values)
-    powerlaw_vals     = powerlaw_transform(u_values, 2, param_mins, param_maxs)
-    log_uniform_vals  = log_uniform_transform_tau(u_values)
+    uniform_vals = uniform_transform(u_values, param_mins, param_maxs)
+    sine_vals = sine_transform(u_values)
+    cosine_vals = cosine_transform(u_values)  
+    #beta_vals = beta_transform(u_values, param_mins, param_maxs)
+    powerlaw_vals = powerlaw_transform(u_values, 2, param_mins, param_maxs)
 
     x_values = jnp.where(
         param_prior_types == 0, uniform_vals,
@@ -237,10 +229,8 @@ def prior_transform_fn(u_params):
             param_prior_types == 1, sine_vals,
             jnp.where(
                 param_prior_types == 2, cosine_vals,
-                jnp.where(
-                    param_prior_types == 3, powerlaw_vals,
-                    log_uniform_vals
-                )
+                #beta_vals
+                powerlaw_vals
             )
         )
     )
@@ -250,70 +240,20 @@ def prior_transform_fn(u_params):
     _, unflatten_fn = jax.flatten_util.ravel_pytree(example_params)
     return unflatten_fn(x_values)
 
-def _alcs_single_bin(B_i, log_S0_i, tau, log_two_df_over_pi):
-    """
-    Fully normalised Laplace-marginalised log-likelihood for one frequency bin.
-
-    Computes log ∫ p(d̃ᵢ|hᵢ,σ̃ᵢ) · p(σ̃ᵢ|σ̃₀ᵢ,τ) dσ̃ᵢ via Laplace approximation.
-
-    Likelihood: log p(d̃ᵢ|hᵢ,σ̃ᵢ) = log(2Δf/π) − 2σ̃ᵢ − Bᵢe^{−2σ̃ᵢ}
-    Prior:      log p(σ̃ᵢ|τ)       = −½log(2πτ²) − (σ̃ᵢ−σ̃₀ᵢ)²/(2τ²)
-    Laplace:    log ∫ f dσ̃ ≈ log f(σ̂) + ½log(2π/H)
-
-    Parameters
-    ----------
-    B_i                : residual power  2·Δf·|dᵢ − hᵢ|²  (real, >= 0)
-    log_S0_i           : log of off-source PSD estimate  log(Ŝᵢ)
-    tau                : log-PSD prior width (shared across bins)
-    log_two_df_over_pi : log(2·Δf/π), data likelihood normalisation (shared across bins)
-    """
-    tau_sq = tau ** 2
-    s0 = 0.5 * log_S0_i
-
-    # 5 unrolled Newton steps to find MAP σ̂
-    s = s0
-    for _ in range(5):
-        e2s = jnp.exp(-2.0 * s)
-        f   = -2.0 + 2.0 * B_i * e2s - (s - s0) / tau_sq
-        fp  = -4.0 * B_i * e2s        - 1.0 / tau_sq
-        s   = s - f / fp
-
-    # Full log f(σ̂) = log p(data|σ̂) + log p(σ̂|prior), all terms
-    log_f = (log_two_df_over_pi                          # likelihood normalisation
-             - 2.0 * s                                   # −log Sᵢ
-             - B_i * jnp.exp(-2.0 * s)                  # −Bᵢ/Sᵢ
-             - 0.5 * jnp.log(2.0 * jnp.pi * tau_sq)     # prior normalisation
-             - (s - s0) ** 2 / (2.0 * tau_sq))           # prior exponent
-
-    # Free Hessian (no extra exp required)
-    H = 4.0 + (2.0 * (s - s0) + 1.0) / tau_sq
-
-    return log_f + 0.5 * jnp.log(2.0 * jnp.pi / H)
-
-# vmap over bins; tau and log_two_df_over_pi are scalars broadcast across all bins
-_alcs_bins = jax.vmap(_alcs_single_bin, in_axes=(0, 0, None, None))
-
-
 def loglikelihood_fn(params):
-    """ALCS noise-marginalised GW log-likelihood."""
-    p = injection_params.copy()
-    p.update(params)
+    p = dict(params)
     p["gmst"] = gmst
     p["eta"] = p["q"] / (1 + p["q"]) ** 2
-
     waveform_sky = waveform(filtered_frequencies, p)
-    align_time   = jnp.exp(-1j * 2 * jnp.pi * filtered_frequencies * (epoch + p["t_c"]))
-
-    df                 = filtered_frequencies[1] - filtered_frequencies[0]
-    log_two_df_over_pi = jnp.log(2.0 * df / jnp.pi)
+    align_time = jnp.exp(-1j * 2 * jnp.pi * filtered_frequencies * (epoch + p["t_c"]))
+    df = filtered_frequencies[1] - filtered_frequencies[0]
     log_L = 0.0
-
     for det in detectors:
         h_dec = det.fd_response(filtered_frequencies, waveform_sky, p) * align_time
-        # Residual power B_i = 2*df * |d_i - h_i|^2  (real, shape: n_bins)
-        B     = 2.0 * df * jnp.abs(det.data - h_dec) ** 2
-        log_L = log_L + jnp.dot(_alcs_bins(B, jnp.log(det.psd), p["tau"], log_two_df_over_pi), det.mask)
-
+        log_L += jnp.dot(
+            jnp.log(2*df / (jnp.pi * det.psd)) - 2*df*jnp.abs(det.data - h_dec)**2 / det.psd,
+            det.mask,
+        )
     return log_L
 
 # Vectorized prior functions for physical space (used in unit cube wrapper)
@@ -341,12 +281,6 @@ def powerlaw_logprob(x, alpha, min, max):
     return jnp.where((x >= min) & (x <= max), logpdf, -jnp.inf)
 
 @jax.jit
-def log_uniform_logprob_tau(x):
-    return jnp.where((x >= 0.001) & (x <= 0.5),
-                     -jnp.log(x) - jnp.log(0.5 / 0.001),
-                     -jnp.inf)
-
-@jax.jit
 def logprior_fn(params):
     """Vectorized prior function using ravel_pytree."""
     param_values, _ = jax.flatten_util.ravel_pytree(params)
@@ -354,8 +288,8 @@ def logprior_fn(params):
     uniform_priors = uniform_logprob(param_values, param_mins, param_maxs)
     sine_priors = sine_logprob(param_values)
     cosine_priors = cosine_logprob(param_values)
-    powerlaw_priors    = powerlaw_logprob(param_values, 2, param_mins, param_maxs)
-    log_uniform_priors = log_uniform_logprob_tau(param_values)
+    #beta_priors = beta_logprob(param_values, param_mins, param_maxs)
+    powerlaw_priors = powerlaw_logprob(param_values, 2, param_mins, param_maxs)
 
     priors = jnp.where(
         param_prior_types == 0, uniform_priors,
@@ -363,10 +297,8 @@ def logprior_fn(params):
             param_prior_types == 1, sine_priors,
             jnp.where(
                 param_prior_types == 2, cosine_priors,
-                jnp.where(
-                    param_prior_types == 3, powerlaw_priors,
-                    log_uniform_priors
-                )
+                #beta_priors
+                powerlaw_priors
             )
         )
     )
@@ -444,7 +376,6 @@ column_to_label = {
     "t_c": r"$t_c$",
     "psi": r"$\psi$",
     "phase_c": r"$\phi_c$",
-    "tau": r"$\tau$",
 }
 
 final_state = finalise(state, dead)
@@ -464,8 +395,8 @@ samples = NestedSamples(
 )
 
 suffix = ("_notched" + args.mask_suffix) if args.notch else ""
-samples.to_csv(f"blackjaxns_alcs_4s{suffix}.csv")
-with open(f'blackjaxns_alcs_4s{suffix}_final_state.pkl', 'wb') as f:
+samples.to_csv(f"blackjaxns_4s_norm{suffix}.csv")
+with open(f'blackjaxns_4s_norm{suffix}_final_state.pkl', 'wb') as f:
     pickle.dump(final_state, f)
-with open(f'blackjaxns_alcs_4s{suffix}_timings.pkl', 'wb') as f:
+with open(f'blackjaxns_4s_norm{suffix}_timings.pkl', 'wb') as f:
     pickle.dump(pbar.format_dict, f)

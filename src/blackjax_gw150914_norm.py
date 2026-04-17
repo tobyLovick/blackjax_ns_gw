@@ -150,9 +150,10 @@ def loglikelihood_fn(params):
     log_L = 0.0
     for det in detectors:
         h_dec = det.fd_response(frequencies, waveform_sky, p) * align_time
-        match_filter = 4 * df * jnp.dot((jnp.conj(h_dec) * det.data / det.psd).real, det.mask)
-        optimal      = 2 * df * jnp.dot(jnp.abs(h_dec)**2 / det.psd, det.mask)
-        log_L += match_filter - optimal
+        log_L += jnp.dot(
+            jnp.log(2*df / (jnp.pi * det.psd)) - 2*df*jnp.abs(det.data - h_dec)**2 / det.psd,
+            det.mask,
+        )
     return log_L
 
 # ---------------------------------------------------------------------------
@@ -272,8 +273,8 @@ samples = NestedSamples(
     dtype=jnp.float64,
 )
 
-samples.to_csv(f"blackjaxns_gw150914{suffix}.csv")
-with open(f'blackjaxns_gw150914{suffix}_final_state.pkl', 'wb') as f:
+samples.to_csv(f"blackjaxns_gw150914_norm{suffix}.csv")
+with open(f'blackjaxns_gw150914_norm{suffix}_final_state.pkl', 'wb') as f:
     pickle.dump(final_state, f)
-with open(f'blackjaxns_gw150914{suffix}_timings.pkl', 'wb') as f:
+with open(f'blackjaxns_gw150914_norm{suffix}_timings.pkl', 'wb') as f:
     pickle.dump(pbar.format_dict, f)
