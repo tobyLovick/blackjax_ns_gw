@@ -1,22 +1,24 @@
 """
 GW150914 nested sampling with Bayesian Anomaly Detection (BAD), optionally
-combined with ALCS.
+combined with ALCS.  Mirrors the parametrisation of Leeney et al. (2025).
 
 Two modes (--mode flag):
   bad       : fixed-PSD likelihood + anomaly floor (no tau)
-  alcs_bad  : ALCS Laplace marginal  + anomaly floor (tau + log_gamma free)
+  alcs_bad  : ALCS Laplace marginal  + anomaly floor (tau + p_anom free)
 
 No notching applied — the anomaly detection handles outlier bins directly.
 
-Anomaly floor per bin:
-    alpha_i = gamma * 2*df / S_i
-so the per-bin combined log-likelihood is:
-    logsumexp(log_Z_i, log_gamma + log(2*df) - log(S_i))
-where log_Z_i is either:
-  - norm:  log(2*df/pi) - log(S_i) - B_i/S_i
-  - ALCS:  Laplace marginal (see blackjax_alcs_gw150914.py)
+Per-bin combined log-likelihood (exact marginalisation over latent mask):
+    log L_i = log[ (1-p) * Z_i  +  p / Delta_i ]
+            = logsumexp( log(1-p) + log Z_i,  log(p) - log(Delta_i) )
 
-log_gamma is inferred with a log-uniform prior over [1e-6, 1e6].
+where Z_i is either the fixed-PSD or ALCS Laplace marginal, and
+    Delta_i = C_ANOM * S_i / (2*df)
+is the anomaly range (fixed; scales with local PSD).
+
+Inferred parameters:
+  p_anom  : prior probability that any bin is anomalous; log-uniform [1e-4, 0.5]
+  tau     : (alcs_bad only) log-PSD std; log-uniform [0.001, 2.0]
 """
 
 import os
@@ -78,8 +80,10 @@ def get_ravel_order(particles_dict):
                 break
     return order
 
+C_ANOM = 10.0   # anomaly range = C_ANOM * S_i / (2*df); fixed, not inferred
+
 base_keys = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "psi", "ra", "dec", "phase_c"]
-sample_keys = base_keys + (["tau"] if USE_ALCS else []) + ["log_gamma"]
+sample_keys = base_keys + (["tau"] if USE_ALCS else []) + ["p_anom"]
 
 test_particles = {key: jax.random.uniform(jax.random.PRNGKey(42), (100,)) for key in sample_keys}
 sample_keys = get_ravel_order(test_particles)
@@ -97,7 +101,7 @@ param_config = {
     "ra":        {"min": 0.0,        "max": 2*jnp.pi,  "prior": "uniform",     "wraparound": True,  "angle": 2*jnp.pi},
     "dec":       {"min": -jnp.pi/2,  "max": jnp.pi/2,  "prior": "cosine",      "wraparound": False, "angle": 1.0},
     "tau":       {"min": 0.001,      "max": 2.0,       "prior": "log_uniform", "wraparound": False, "angle": 1.0},
-    "log_gamma": {"min": -6.0,       "max": 6.0,       "prior": "uniform",     "wraparound": False, "angle": 1.0},
+    "p_anom":    {"min": 1e-4,       "max": 0.5,       "prior": "log_uniform", "wraparound": False, "angle": 1.0},
 }
 
 sampled_config = {key: param_config[key] for key in sample_keys}
@@ -135,7 +139,7 @@ def cosine_transform(u):           return jnp.arcsin(2 * u - 1)
 def powerlaw_transform(u, alpha, mn, mx):
     return (mn**(1+alpha) + u*(mx**(1+alpha)-mn**(1+alpha)))**(1/(1+alpha))
 @jax.jit
-def log_uniform_transform(u):      return 0.001 * (2.0/0.001)**u
+def log_uniform_transform(u, a, b): return a * (b/a)**u
 
 @jax.jit
 def prior_transform_fn(u_params):
@@ -145,7 +149,7 @@ def prior_transform_fn(u_params):
         jnp.where(param_prior_types == 1, sine_transform(u_values),
         jnp.where(param_prior_types == 2, cosine_transform(u_values),
         jnp.where(param_prior_types == 3, powerlaw_transform(u_values, 2, param_mins, param_maxs),
-                  log_uniform_transform(u_values)))))
+                  log_uniform_transform(u_values, param_mins, param_maxs)))))
     example_params = {key: 0.0 for key in sample_keys}
     _, unflatten_fn = jax.flatten_util.ravel_pytree(example_params)
     return unflatten_fn(x_values)
@@ -175,21 +179,22 @@ def _alcs_single_bin(B_i, log_S_i, tau, log_two_df_over_pi):
     H = 4.0 + (2.0*(s - s0) + 1.0)/tau_sq
     return log_f + 0.5*jnp.log(2.0*jnp.pi/H)
 
-def _bad_combine(log_Z_i, log_S_i, log_gamma, log_two_df):
-    """logsumexp(log_Z_i, anomaly_floor_i) where floor = gamma * 2df / S_i."""
-    log_floor = log_gamma + log_two_df - log_S_i
-    return jnp.logaddexp(log_Z_i, log_floor)
+def _bad_combine(log_Z_i, log_S_i, p_anom, log_two_df):
+    """log[ (1-p)*Z_i  +  p/Delta_i ]  where Delta_i = C_ANOM * S_i / (2*df)."""
+    log_good  = jnp.log1p(-p_anom) + log_Z_i
+    log_floor = jnp.log(p_anom) + log_two_df - log_S_i - jnp.log(C_ANOM)
+    return jnp.logaddexp(log_good, log_floor)
 
 # vmapped over bins
 if USE_ALCS:
-    def _per_bin(B_i, log_S_i, tau, log_gamma, log_two_df_over_pi, log_two_df):
+    def _per_bin(B_i, log_S_i, tau, p_anom, log_two_df_over_pi, log_two_df):
         log_Z = _alcs_single_bin(B_i, log_S_i, tau, log_two_df_over_pi)
-        return _bad_combine(log_Z, log_S_i, log_gamma, log_two_df)
+        return _bad_combine(log_Z, log_S_i, p_anom, log_two_df)
     _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None, None, None))
 else:
-    def _per_bin(B_i, log_S_i, log_gamma, log_two_df_over_pi, log_two_df):
+    def _per_bin(B_i, log_S_i, p_anom, log_two_df_over_pi, log_two_df):
         log_Z = _norm_single_bin(B_i, log_S_i, log_two_df_over_pi)
-        return _bad_combine(log_Z, log_S_i, log_gamma, log_two_df)
+        return _bad_combine(log_Z, log_S_i, p_anom, log_two_df)
     _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None, None))
 
 # ---------------------------------------------------------------------------
@@ -210,10 +215,10 @@ def loglikelihood_fn(params):
         B      = 2.0*df * jnp.abs(det.data - h_dec)**2
         log_S  = jnp.log(det.psd)
         if USE_ALCS:
-            contrib = _per_bin_v(B, log_S, p["tau"], p["log_gamma"],
+            contrib = _per_bin_v(B, log_S, p["tau"], p["p_anom"],
                                  log_two_df_over_pi, log_two_df)
         else:
-            contrib = _per_bin_v(B, log_S, p["log_gamma"],
+            contrib = _per_bin_v(B, log_S, p["p_anom"],
                                  log_two_df_over_pi, log_two_df)
         log_L = log_L + jnp.sum(contrib)
     return log_L
@@ -235,9 +240,9 @@ def powerlaw_logprob(x, alpha, mn, mx):
     logpdf = alpha*jnp.log(x) + jnp.log(1+alpha) - jnp.log(mx**(1+alpha)-mn**(1+alpha))
     return jnp.where((x >= mn) & (x <= mx), logpdf, -jnp.inf)
 @jax.jit
-def log_uniform_logprob(x):
-    return jnp.where((x >= 0.001) & (x <= 2.0),
-                     -jnp.log(x) - jnp.log(2.0/0.001), -jnp.inf)
+def log_uniform_logprob(x, a, b):
+    return jnp.where((x >= a) & (x <= b),
+                     -jnp.log(x) - jnp.log(jnp.log(b/a)), -jnp.inf)
 
 @jax.jit
 def logprior_fn(params):
@@ -247,7 +252,7 @@ def logprior_fn(params):
         jnp.where(param_prior_types == 1, sine_logprob(param_values),
         jnp.where(param_prior_types == 2, cosine_logprob(param_values),
         jnp.where(param_prior_types == 3, powerlaw_logprob(param_values, 2, param_mins, param_maxs),
-                  log_uniform_logprob(param_values)))))
+                  log_uniform_logprob(param_values, param_mins, param_maxs)))))
     return jnp.sum(priors)
 
 # ---------------------------------------------------------------------------
@@ -313,7 +318,7 @@ column_to_label = {
     "iota": r"$\iota$", "ra": r"$\alpha$", "dec": r"$\delta$",
     "s1_z": r"$\chi_1$", "s2_z": r"$\chi_2$", "t_c": r"$t_c$",
     "psi": r"$\psi$", "phase_c": r"$\phi_c$",
-    "tau": r"$\tau$", "log_gamma": r"$\log\gamma$",
+    "tau": r"$\tau$", "p_anom": r"$p$",
 }
 
 out_name = f"blackjaxns_{args.mode}_gw150914"
