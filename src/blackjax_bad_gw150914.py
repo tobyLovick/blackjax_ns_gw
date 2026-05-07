@@ -48,6 +48,8 @@ from custom_kernels import (
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["bad", "alcs_bad"], default="alcs_bad",
                     help="bad: fixed-PSD+anomaly; alcs_bad: ALCS+anomaly")
+parser.add_argument("--c_anom", type=float, default=10.0,
+                    help="Anomaly range scale: Delta_i = C_ANOM * S_i / (2*df). Default 10.")
 args = parser.parse_args()
 
 USE_ALCS = (args.mode == "alcs_bad")
@@ -80,7 +82,7 @@ def get_ravel_order(particles_dict):
                 break
     return order
 
-C_ANOM = 10.0   # anomaly range = C_ANOM * S_i / (2*df); fixed, not inferred
+C_ANOM = args.c_anom   # anomaly range = C_ANOM * S_i / (2*df); fixed, not inferred
 
 base_keys = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "psi", "ra", "dec", "phase_c"]
 sample_keys = base_keys + (["tau"] if USE_ALCS else []) + ["p_anom"]
@@ -321,7 +323,8 @@ column_to_label = {
     "tau": r"$\tau$", "p_anom": r"$p$",
 }
 
-out_name = f"blackjaxns_{args.mode}_gw150914"
+c_str    = f"_C{args.c_anom:.0f}" if args.c_anom != 10.0 else ""
+out_name = f"blackjaxns_{args.mode}_gw150914{c_str}"
 
 final_state       = finalise(state, dead)
 physical_particles = transform_to_physical(final_state.particles, prior_transform_fn)
