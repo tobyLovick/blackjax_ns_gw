@@ -122,3 +122,8 @@ src/*
 
 # SLURM submission script
 !src/submit_all.sh
+
+# Quadrature versions and benchmarks
+!src/blackjax_alcs_quad_gw150914.py
+!src/blackjax_bad_quad_gw150914.py
+!src/test_alcs_quadrature.py

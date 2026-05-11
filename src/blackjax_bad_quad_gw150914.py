@@ -1,0 +1,354 @@
+"""
+GW150914 nested sampling with Bayesian Anomaly Detection (BAD), optionally
+combined with ALCS.  Mirrors the parametrisation of Leeney et al. (2025).
+
+Two modes (--mode flag):
+  bad       : fixed-PSD likelihood + anomaly floor (no tau)
+  alcs_bad  : ALCS Laplace marginal  + anomaly floor (tau + p_anom free)
+
+No notching applied — the anomaly detection handles outlier bins directly.
+
+Per-bin combined log-likelihood (exact marginalisation over latent mask):
+    log L_i = log[ (1-p) * Z_i  +  p / Delta_i ]
+            = logsumexp( log(1-p) + log Z_i,  log(p) - log(Delta_i) )
+
+where Z_i is either the fixed-PSD or ALCS Laplace marginal, and
+    Delta_i = C_ANOM * S_i / (2*df)
+is the anomaly range (fixed; scales with local PSD).
+
+Inferred parameters:
+  p_anom  : prior probability that any bin is anomalous; log-uniform [1e-4, 0.5]
+  tau     : (alcs_bad only) log-PSD std; log-uniform [0.001, 2.0]
+"""
+
+import os
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+
+import argparse
+import jax
+import jax.numpy as jnp
+import numpy as np
+import blackjax
+from astropy.time import Time
+import tqdm
+import pickle
+
+jax.config.update("jax_enable_x64", True)
+
+# Gauss-Hermite nodes/weights for MAP-centred quadrature (compile-time constants)
+_gh_x_np, _gh_w_np = np.polynomial.hermite.hermgauss(20)
+GH_X    = jnp.array(_gh_x_np)
+GH_LOGW = jnp.log(jnp.array(_gh_w_np))
+
+from jimgw.single_event.detector import H1, L1
+from jimgw.single_event.waveform import RippleIMRPhenomD
+from custom_kernels import (
+    acceptance_walk_sampler,
+    create_unit_cube_functions,
+    init_unit_cube_particles,
+    transform_to_physical,
+)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--mode", choices=["bad", "alcs_bad"], default="alcs_bad",
+                    help="bad: fixed-PSD+anomaly; alcs_bad: ALCS+anomaly")
+args = parser.parse_args()
+
+USE_ALCS = (args.mode == "alcs_bad")
+
+waveform = RippleIMRPhenomD(f_ref=20)
+
+# ---------------------------------------------------------------------------
+# Data — no notching
+# ---------------------------------------------------------------------------
+frequencies = jnp.array(np.load('gw150914_frequencies.npy'), dtype=jnp.float64)
+
+detectors = [H1, L1]
+for det in detectors:
+    det.frequencies = frequencies
+    det.data = jnp.array(np.load(f'gw150914_{det.name}_strain.npy'), dtype=jnp.complex128)
+    det.psd  = jnp.array(np.load(f'gw150914_{det.name}_psd.npy'),    dtype=jnp.float64)
+    det.mask = jnp.ones(len(frequencies), dtype=jnp.float64)   # no notch
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+def get_ravel_order(particles_dict):
+    test_dict = {key: float(i) for i, key in enumerate(particles_dict.keys())}
+    test_flat, _ = jax.flatten_util.ravel_pytree(test_dict)
+    order = []
+    for val in test_flat:
+        for key, test_val in test_dict.items():
+            if abs(val - test_val) < 1e-10:
+                order.append(key)
+                break
+    return order
+
+# Physical anomaly range Delta (units of |d_i|^2, same as S_i/(2*df)).
+# Set to the maximum plausible LIGO frequency-domain data power:
+# LIGO strain ASD saturation ~ 1e-19 /sqrt(Hz), so |d_i|_max^2 ~ (1e-19)^2 / df ~ 4e-38.
+# Delta is a fixed prior, not inferred. Results should be insensitive to it
+# within a factor of ~10 (Will Handley, meeting 7-5-26).
+DELTA = 4e-38
+
+base_keys = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "psi", "ra", "dec", "phase_c"]
+sample_keys = base_keys + (["tau"] if USE_ALCS else []) + ["p_anom"]
+
+test_particles = {key: jax.random.uniform(jax.random.PRNGKey(42), (100,)) for key in sample_keys}
+sample_keys = get_ravel_order(test_particles)
+
+param_config = {
+    "M_c":       {"min": 25.0,       "max": 50.0,      "prior": "uniform",     "wraparound": False, "angle": 1.0},
+    "q":         {"min": 0.25,       "max": 1.0,       "prior": "uniform",     "wraparound": False, "angle": 1.0},
+    "s1_z":      {"min": -1.0,       "max": 1.0,       "prior": "uniform",     "wraparound": False, "angle": 1.0},
+    "s2_z":      {"min": -1.0,       "max": 1.0,       "prior": "uniform",     "wraparound": False, "angle": 1.0},
+    "iota":      {"min": 0.0,        "max": jnp.pi,    "prior": "sine",        "wraparound": False, "angle": 1.0},
+    "d_L":       {"min": 100.0,      "max": 5000.0,    "prior": "powerlaw",    "wraparound": False, "angle": 1.0},
+    "t_c":       {"min": -0.1,       "max": 0.1,       "prior": "uniform",     "wraparound": False, "angle": 1.0},
+    "phase_c":   {"min": 0.0,        "max": 2*jnp.pi,  "prior": "uniform",     "wraparound": True,  "angle": 2*jnp.pi},
+    "psi":       {"min": 0.0,        "max": jnp.pi,    "prior": "uniform",     "wraparound": True,  "angle": jnp.pi},
+    "ra":        {"min": 0.0,        "max": 2*jnp.pi,  "prior": "uniform",     "wraparound": True,  "angle": 2*jnp.pi},
+    "dec":       {"min": -jnp.pi/2,  "max": jnp.pi/2,  "prior": "cosine",      "wraparound": False, "angle": 1.0},
+    "tau":       {"min": 0.001,      "max": 2.0,       "prior": "log_uniform", "wraparound": False, "angle": 1.0},
+    "p_anom":    {"min": 1e-4,       "max": 0.5,       "prior": "log_uniform", "wraparound": False, "angle": 1.0},
+}
+
+sampled_config = {key: param_config[key] for key in sample_keys}
+n_dims = len(sample_keys)
+
+param_mins = jnp.array([sampled_config[key]["min"] for key in sample_keys])
+param_maxs = jnp.array([sampled_config[key]["max"] for key in sample_keys])
+param_prior_types = jnp.array([
+    0 if sampled_config[key]["prior"] == "uniform"     else
+    1 if sampled_config[key]["prior"] == "sine"        else
+    2 if sampled_config[key]["prior"] == "cosine"      else
+    3 if sampled_config[key]["prior"] == "powerlaw"    else
+    4 for key in sample_keys
+])
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+post_trigger_duration = 2
+duration              = 4
+epoch                 = duration - post_trigger_duration
+gps                   = 1126259462.4
+gmst  = Time(gps, format="gps").sidereal_time("apparent", "greenwich").rad
+
+# ---------------------------------------------------------------------------
+# Prior transforms
+# ---------------------------------------------------------------------------
+@jax.jit
+def uniform_transform(u, a, b):    return a + u * (b - a)
+@jax.jit
+def sine_transform(u):             return jnp.arccos(1 - 2 * u)
+@jax.jit
+def cosine_transform(u):           return jnp.arcsin(2 * u - 1)
+@jax.jit
+def powerlaw_transform(u, alpha, mn, mx):
+    return (mn**(1+alpha) + u*(mx**(1+alpha)-mn**(1+alpha)))**(1/(1+alpha))
+@jax.jit
+def log_uniform_transform(u, a, b): return a * (b/a)**u
+
+@jax.jit
+def prior_transform_fn(u_params):
+    u_values, _ = jax.flatten_util.ravel_pytree(u_params)
+    x_values = jnp.where(
+        param_prior_types == 0, uniform_transform(u_values, param_mins, param_maxs),
+        jnp.where(param_prior_types == 1, sine_transform(u_values),
+        jnp.where(param_prior_types == 2, cosine_transform(u_values),
+        jnp.where(param_prior_types == 3, powerlaw_transform(u_values, 2, param_mins, param_maxs),
+                  log_uniform_transform(u_values, param_mins, param_maxs)))))
+    example_params = {key: 0.0 for key in sample_keys}
+    _, unflatten_fn = jax.flatten_util.ravel_pytree(example_params)
+    return unflatten_fn(x_values)
+
+# ---------------------------------------------------------------------------
+# Per-bin likelihoods
+# ---------------------------------------------------------------------------
+def _norm_single_bin(B_i, log_S_i, log_two_df_over_pi):
+    """Fixed-PSD fully normalised log-likelihood."""
+    return log_two_df_over_pi - log_S_i - B_i * jnp.exp(-log_S_i)
+
+def _alcs_single_bin(B_i, log_S_i, tau, log_two_df_over_pi):
+    """ALCS marginal via MAP-centred Gauss-Hermite quadrature."""
+    tau_sq = tau**2
+    s0 = 0.5 * log_S_i
+    s  = s0
+    for _ in range(5):
+        e2s = jnp.exp(-2.0 * s)
+        f   = -2.0 + 2.0*B_i*e2s - (s - s0)/tau_sq
+        fp  = -4.0 * B_i*e2s     - 1.0/tau_sq
+        s   = s - f/fp
+    H     = 4.0*B_i*jnp.exp(-2.0*s) + 1.0/tau_sq
+    scale = jnp.sqrt(2.0 / H)
+    s_nodes = s + scale * GH_X
+    g_nodes = (-2.0*s_nodes - B_i*jnp.exp(-2.0*s_nodes)
+               - (s_nodes - s0)**2 / (2.0*tau_sq))
+    log_integral = jnp.log(scale) + jax.scipy.special.logsumexp(GH_LOGW + g_nodes + GH_X**2)
+    return log_two_df_over_pi - 0.5*jnp.log(2.0*jnp.pi*tau_sq) + log_integral
+
+LOG_DELTA = jnp.log(DELTA)
+
+def _bad_combine(log_Z_i, p_anom):
+    """log[ (1-p)*Z_i  +  p/Delta ]  where Delta is a fixed physical constant."""
+    log_good  = jnp.log1p(-p_anom) + log_Z_i
+    log_floor = jnp.log(p_anom) - LOG_DELTA
+    return jnp.logaddexp(log_good, log_floor)
+
+# vmapped over bins
+if USE_ALCS:
+    def _per_bin(B_i, log_S_i, tau, p_anom, log_two_df_over_pi):
+        log_Z = _alcs_single_bin(B_i, log_S_i, tau, log_two_df_over_pi)
+        return _bad_combine(log_Z, p_anom)
+    _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None, None))
+else:
+    def _per_bin(B_i, log_S_i, p_anom, log_two_df_over_pi):
+        log_Z = _norm_single_bin(B_i, log_S_i, log_two_df_over_pi)
+        return _bad_combine(log_Z, p_anom)
+    _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None))
+
+# ---------------------------------------------------------------------------
+# Likelihood
+# ---------------------------------------------------------------------------
+def loglikelihood_fn(params):
+    p = dict(params)
+    p["gmst"] = gmst
+    p["eta"]  = p["q"] / (1 + p["q"])**2
+    waveform_sky = waveform(frequencies, p)
+    align_time   = jnp.exp(-1j * 2*jnp.pi * frequencies * (epoch + p["t_c"]))
+    df           = frequencies[1] - frequencies[0]
+    log_two_df_over_pi = jnp.log(2.0*df/jnp.pi)
+    log_L = 0.0
+    for det in detectors:
+        h_dec  = det.fd_response(frequencies, waveform_sky, p) * align_time
+        B      = 2.0*df * jnp.abs(det.data - h_dec)**2
+        log_S  = jnp.log(det.psd)
+        if USE_ALCS:
+            contrib = _per_bin_v(B, log_S, p["tau"], p["p_anom"],
+                                 log_two_df_over_pi)
+        else:
+            contrib = _per_bin_v(B, log_S, p["p_anom"],
+                                 log_two_df_over_pi)
+        log_L = log_L + jnp.sum(contrib)
+    return log_L
+
+# ---------------------------------------------------------------------------
+# Prior log-probabilities
+# ---------------------------------------------------------------------------
+@jax.jit
+def uniform_logprob(x, a, b):
+    return jnp.where((x >= a) & (x <= b), -jnp.log(b - a), -jnp.inf)
+@jax.jit
+def sine_logprob(x):
+    return jnp.where((x >= 0.0) & (x <= jnp.pi), jnp.log(jnp.sin(x)/2.0), -jnp.inf)
+@jax.jit
+def cosine_logprob(x):
+    return jnp.where(jnp.abs(x) < jnp.pi/2, jnp.log(jnp.cos(x)/2.0), -jnp.inf)
+@jax.jit
+def powerlaw_logprob(x, alpha, mn, mx):
+    logpdf = alpha*jnp.log(x) + jnp.log(1+alpha) - jnp.log(mx**(1+alpha)-mn**(1+alpha))
+    return jnp.where((x >= mn) & (x <= mx), logpdf, -jnp.inf)
+@jax.jit
+def log_uniform_logprob(x, a, b):
+    return jnp.where((x >= a) & (x <= b),
+                     -jnp.log(x) - jnp.log(jnp.log(b/a)), -jnp.inf)
+
+@jax.jit
+def logprior_fn(params):
+    param_values, _ = jax.flatten_util.ravel_pytree(params)
+    priors = jnp.where(
+        param_prior_types == 0, uniform_logprob(param_values, param_mins, param_maxs),
+        jnp.where(param_prior_types == 1, sine_logprob(param_values),
+        jnp.where(param_prior_types == 2, cosine_logprob(param_values),
+        jnp.where(param_prior_types == 3, powerlaw_logprob(param_values, 2, param_mins, param_maxs),
+                  log_uniform_logprob(param_values, param_mins, param_maxs)))))
+    return jnp.sum(priors)
+
+# ---------------------------------------------------------------------------
+# Nested sampling
+# ---------------------------------------------------------------------------
+n_live   = 1400
+n_delete = 700
+
+rng_key = jax.random.PRNGKey(10)
+rng_key, init_key = jax.random.split(rng_key)
+
+example_params      = {key: 0.0 for key in sample_keys}
+unit_cube_particles = init_unit_cube_particles(init_key, example_params, n_live)
+
+periodic_mask = jax.tree_util.tree_map(lambda _: False, example_params)
+for key in sample_keys:
+    if sampled_config[key]["wraparound"]:
+        periodic_mask[key] = True
+
+unit_cube_fns = create_unit_cube_functions(
+    physical_loglikelihood_fn=loglikelihood_fn,
+    prior_transform_fn=prior_transform_fn,
+    mask_tree=periodic_mask,
+)
+
+nested_sampler = acceptance_walk_sampler(
+    logprior_fn=unit_cube_fns['logprior_fn'],
+    loglikelihood_fn=unit_cube_fns['loglikelihood_fn'],
+    nlive=n_live,
+    n_target=60,
+    max_mcmc=5000,
+    num_delete=n_delete,
+    stepper_fn=unit_cube_fns['stepper_fn'],
+)
+state = nested_sampler.init(unit_cube_particles)
+
+@jax.jit
+def one_step(carry, xs):
+    state, k = carry
+    k, subk = jax.random.split(k)
+    state, dead_point = nested_sampler.step(subk, state)
+    return (state, k), dead_point
+
+def terminate(state):
+    dlogz = jnp.logaddexp(0, state.logZ_live - state.logZ)
+    return jnp.isfinite(dlogz) and dlogz < 0.1
+
+dead = []
+with tqdm.tqdm(desc="Dead points", unit=" dead points") as pbar:
+    while not terminate(state):
+        (state, rng_key), dead_info = one_step((state, rng_key), None)
+        dead.append(dead_info)
+        pbar.update(n_delete)
+
+# ---------------------------------------------------------------------------
+# Save
+# ---------------------------------------------------------------------------
+from blackjax.ns.utils import finalise
+from anesthetic import NestedSamples
+
+column_to_label = {
+    "M_c": r"$\mathcal{M}_c$", "q": r"$q$", "d_L": r"$d_L$",
+    "iota": r"$\iota$", "ra": r"$\alpha$", "dec": r"$\delta$",
+    "s1_z": r"$\chi_1$", "s2_z": r"$\chi_2$", "t_c": r"$t_c$",
+    "psi": r"$\psi$", "phase_c": r"$\phi_c$",
+    "tau": r"$\tau$", "p_anom": r"$p$",
+}
+
+out_name = f"blackjaxns_{args.mode}_gw150914_quad"
+
+final_state       = finalise(state, dead)
+physical_particles = transform_to_physical(final_state.particles, prior_transform_fn)
+logL_birth = jnp.where(jnp.isnan(final_state.loglikelihood_birth),
+                        -jnp.inf, final_state.loglikelihood_birth)
+
+samples = NestedSamples(
+    physical_particles,
+    logL=final_state.loglikelihood,
+    logL_birth=logL_birth,
+    labels=column_to_label,
+    logzero=jnp.nan,
+    dtype=jnp.float64,
+)
+
+samples.to_csv(f"{out_name}.csv")
+with open(f'{out_name}_final_state.pkl', 'wb') as f:
+    pickle.dump(final_state, f)
+print(f"Saved {out_name}.csv   logZ = {samples.logZ():.2f}")
