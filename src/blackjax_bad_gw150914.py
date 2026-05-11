@@ -48,8 +48,6 @@ from custom_kernels import (
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["bad", "alcs_bad"], default="alcs_bad",
                     help="bad: fixed-PSD+anomaly; alcs_bad: ALCS+anomaly")
-parser.add_argument("--c_anom", type=float, default=10.0,
-                    help="Anomaly range scale: Delta_i = C_ANOM * S_i / (2*df). Default 10.")
 args = parser.parse_args()
 
 USE_ALCS = (args.mode == "alcs_bad")
@@ -82,7 +80,12 @@ def get_ravel_order(particles_dict):
                 break
     return order
 
-C_ANOM = args.c_anom   # anomaly range = C_ANOM * S_i / (2*df); fixed, not inferred
+# Physical anomaly range Delta (units of |d_i|^2, same as S_i/(2*df)).
+# Set to the maximum plausible LIGO frequency-domain data power:
+# LIGO strain ASD saturation ~ 1e-19 /sqrt(Hz), so |d_i|_max^2 ~ (1e-19)^2 / df ~ 4e-38.
+# Delta is a fixed prior, not inferred. Results should be insensitive to it
+# within a factor of ~10 (Will Handley, meeting 7-5-26).
+DELTA = 4e-38
 
 base_keys = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "psi", "ra", "dec", "phase_c"]
 sample_keys = base_keys + (["tau"] if USE_ALCS else []) + ["p_anom"]
@@ -181,23 +184,25 @@ def _alcs_single_bin(B_i, log_S_i, tau, log_two_df_over_pi):
     H = 4.0 + (2.0*(s - s0) + 1.0)/tau_sq
     return log_f + 0.5*jnp.log(2.0*jnp.pi/H)
 
-def _bad_combine(log_Z_i, log_S_i, p_anom, log_two_df):
-    """log[ (1-p)*Z_i  +  p/Delta_i ]  where Delta_i = C_ANOM * S_i / (2*df)."""
+LOG_DELTA = jnp.log(DELTA)
+
+def _bad_combine(log_Z_i, p_anom):
+    """log[ (1-p)*Z_i  +  p/Delta ]  where Delta is a fixed physical constant."""
     log_good  = jnp.log1p(-p_anom) + log_Z_i
-    log_floor = jnp.log(p_anom) + log_two_df - log_S_i - jnp.log(C_ANOM)
+    log_floor = jnp.log(p_anom) - LOG_DELTA
     return jnp.logaddexp(log_good, log_floor)
 
 # vmapped over bins
 if USE_ALCS:
-    def _per_bin(B_i, log_S_i, tau, p_anom, log_two_df_over_pi, log_two_df):
+    def _per_bin(B_i, log_S_i, tau, p_anom, log_two_df_over_pi):
         log_Z = _alcs_single_bin(B_i, log_S_i, tau, log_two_df_over_pi)
-        return _bad_combine(log_Z, log_S_i, p_anom, log_two_df)
-    _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None, None, None))
-else:
-    def _per_bin(B_i, log_S_i, p_anom, log_two_df_over_pi, log_two_df):
-        log_Z = _norm_single_bin(B_i, log_S_i, log_two_df_over_pi)
-        return _bad_combine(log_Z, log_S_i, p_anom, log_two_df)
+        return _bad_combine(log_Z, p_anom)
     _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None, None))
+else:
+    def _per_bin(B_i, log_S_i, p_anom, log_two_df_over_pi):
+        log_Z = _norm_single_bin(B_i, log_S_i, log_two_df_over_pi)
+        return _bad_combine(log_Z, p_anom)
+    _per_bin_v = jax.vmap(_per_bin, in_axes=(0, 0, None, None))
 
 # ---------------------------------------------------------------------------
 # Likelihood
@@ -210,7 +215,6 @@ def loglikelihood_fn(params):
     align_time   = jnp.exp(-1j * 2*jnp.pi * frequencies * (epoch + p["t_c"]))
     df           = frequencies[1] - frequencies[0]
     log_two_df_over_pi = jnp.log(2.0*df/jnp.pi)
-    log_two_df         = jnp.log(2.0*df)
     log_L = 0.0
     for det in detectors:
         h_dec  = det.fd_response(frequencies, waveform_sky, p) * align_time
@@ -218,10 +222,10 @@ def loglikelihood_fn(params):
         log_S  = jnp.log(det.psd)
         if USE_ALCS:
             contrib = _per_bin_v(B, log_S, p["tau"], p["p_anom"],
-                                 log_two_df_over_pi, log_two_df)
+                                 log_two_df_over_pi)
         else:
             contrib = _per_bin_v(B, log_S, p["p_anom"],
-                                 log_two_df_over_pi, log_two_df)
+                                 log_two_df_over_pi)
         log_L = log_L + jnp.sum(contrib)
     return log_L
 
@@ -323,8 +327,7 @@ column_to_label = {
     "tau": r"$\tau$", "p_anom": r"$p$",
 }
 
-c_str    = f"_C{args.c_anom:.0f}" if args.c_anom != 10.0 else ""
-out_name = f"blackjaxns_{args.mode}_gw150914{c_str}"
+out_name = f"blackjaxns_{args.mode}_gw150914_physical"
 
 final_state       = finalise(state, dead)
 physical_particles = transform_to_physical(final_state.particles, prior_transform_fn)
