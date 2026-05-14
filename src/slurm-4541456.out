@@ -1,0 +1,21 @@
+
+ArgumentError: activate does not accept more than one argument:
+['python', 'blackjax_bad_gw150914.py', '--mode', 'bad']
+
+
+========================================
+Job ID:       4541456
+Job Name:     run.sh
+Node:         nid011069
+GPUs:         1
+Start time:   Mon May 11 10:12:25 AM UTC 2026
+Working dir:  /home/u6hj/lovick.u6hj/GW/src
+Command:      python blackjax_bad_gw150914.py --mode bad
+Python:       /home/u6hj/lovick.u6hj/miniforge3/envs/lao/bin/python
+========================================
+Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:09, 76.89 dead points/s]Dead points: 1400 dead points [00:16, 85.30 dead points/s]Dead points: 2100 dead points [00:17, 139.78 dead points/s]Dead points: 2800 dead points [00:19, 192.49 dead points/s]Dead points: 3500 dead points [00:25, 158.69 dead points/s]Dead points: 4200 dead points [00:30, 143.60 dead points/s]Dead points: 4900 dead points [00:36, 135.29 dead points/s]Dead points: 5600 dead points [00:42, 130.25 dead points/s]Dead points: 6300 dead points [00:48, 127.11 dead points/s]Dead points: 7000 dead points [00:54, 125.15 dead points/s]Dead points: 7700 dead points [00:59, 123.82 dead points/s]Dead points: 8400 dead points [01:05, 122.89 dead points/s]Dead points: 9100 dead points [01:11, 122.27 dead points/s]Dead points: 9800 dead points [01:17, 121.86 dead points/s]Dead points: 10500 dead points [01:23, 121.58 dead points/s]Dead points: 11200 dead points [01:28, 121.42 dead points/s]Dead points: 11900 dead points [01:34, 121.30 dead points/s]Dead points: 12600 dead points [01:40, 121.24 dead points/s]Dead points: 13300 dead points [01:46, 121.21 dead points/s]Dead points: 14000 dead points [01:52, 121.19 dead points/s]Dead points: 14700 dead points [01:57, 121.22 dead points/s]Dead points: 15400 dead points [02:03, 121.24 dead points/s]Dead points: 16100 dead points [02:09, 121.24 dead points/s]Dead points: 16800 dead points [02:15, 121.31 dead points/s]Dead points: 17500 dead points [02:20, 121.31 dead points/s]Dead points: 18200 dead points [02:26, 121.33 dead points/s]Dead points: 18900 dead points [02:32, 121.38 dead points/s]Dead points: 19600 dead points [02:38, 121.41 dead points/s]Dead points: 20300 dead points [02:43, 121.44 dead points/s]Dead points: 21000 dead points [02:49, 121.51 dead points/s]Dead points: 21700 dead points [02:55, 121.60 dead points/s]Dead points: 22400 dead points [03:01, 121.70 dead points/s]Dead points: 23100 dead points [03:06, 121.83 dead points/s]Dead points: 23800 dead points [03:12, 121.95 dead points/s]Dead points: 24500 dead points [03:18, 122.09 dead points/s]Dead points: 25200 dead points [03:24, 122.21 dead points/s]Dead points: 25900 dead points [03:29, 122.29 dead points/s]Dead points: 26600 dead points [03:35, 122.32 dead points/s]Dead points: 27300 dead points [03:41, 122.38 dead points/s]Dead points: 28000 dead points [03:46, 122.39 dead points/s]Dead points: 28700 dead points [03:52, 122.39 dead points/s]Dead points: 29400 dead points [03:58, 122.42 dead points/s]Dead points: 30100 dead points [04:04, 122.42 dead points/s]Dead points: 30800 dead points [04:09, 122.41 dead points/s]Dead points: 31500 dead points [04:15, 122.39 dead points/s]Dead points: 32200 dead points [04:21, 122.35 dead points/s]Dead points: 32900 dead points [04:26, 122.37 dead points/s]Dead points: 33600 dead points [04:32, 122.37 dead points/s]Dead points: 34300 dead points [04:38, 122.35 dead points/s]Dead points: 35000 dead points [04:44, 122.37 dead points/s]Dead points: 35700 dead points [04:49, 122.35 dead points/s]Dead points: 36400 dead points [04:55, 122.37 dead points/s]Dead points: 37100 dead points [05:01, 122.39 dead points/s]Dead points: 37800 dead points [05:06, 122.40 dead points/s]Dead points: 37800 dead points [05:06, 123.13 dead points/s]
+Saved blackjaxns_bad_gw150914_physical.csv   logZ = 819671.51
+========================================
+End time:     Mon May 11 10:18:13 AM UTC 2026
+Exit code:    0
+========================================

@@ -1,0 +1,20 @@
+
+ArgumentError: activate does not accept more than one argument:
+['python', 'blackjax_4s.py']
+
+
+========================================
+Job ID:       3485213
+Job Name:     run.sh
+Node:         nid010406
+GPUs:         1
+Start time:   Mon Mar 30 08:04:34 PM UTC 2026
+Working dir:  /home/u6bn/lovick.u6bn/GW/src
+Command:      python blackjax_4s.py
+Python:       /home/u6bn/lovick.u6bn/miniforge3/envs/lao/bin/python
+========================================
+Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:10, 69.81 dead points/s]Dead points: 1400 dead points [00:19, 73.05 dead points/s]Dead points: 2100 dead points [00:22, 103.56 dead points/s]Dead points: 2800 dead points [00:27, 116.14 dead points/s]Dead points: 3500 dead points [00:33, 115.55 dead points/s]Dead points: 4200 dead points [00:39, 115.17 dead points/s]Dead points: 4900 dead points [00:45, 114.73 dead points/s]Dead points: 5600 dead points [00:52, 114.59 dead points/s]Dead points: 6300 dead points [00:58, 114.42 dead points/s]Dead points: 7000 dead points [01:04, 114.44 dead points/s]Dead points: 7700 dead points [01:10, 114.30 dead points/s]Dead points: 8400 dead points [01:16, 114.35 dead points/s]Dead points: 9100 dead points [01:22, 114.29 dead points/s]Dead points: 9800 dead points [01:28, 114.32 dead points/s]Dead points: 10500 dead points [01:34, 114.30 dead points/s]Dead points: 11200 dead points [01:41, 114.33 dead points/s]Dead points: 11900 dead points [01:47, 114.29 dead points/s]Dead points: 12600 dead points [01:53, 114.40 dead points/s]Dead points: 13300 dead points [01:59, 114.38 dead points/s]Dead points: 14000 dead points [02:05, 114.42 dead points/s]Dead points: 14700 dead points [02:11, 114.40 dead points/s]Dead points: 15400 dead points [02:17, 114.50 dead points/s]Dead points: 16100 dead points [02:23, 114.48 dead points/s]Dead points: 16800 dead points [02:30, 114.53 dead points/s]Dead points: 17500 dead points [02:36, 114.50 dead points/s]Dead points: 18200 dead points [02:42, 114.55 dead points/s]Dead points: 18900 dead points [02:48, 114.46 dead points/s]Dead points: 19600 dead points [02:54, 114.43 dead points/s]Dead points: 20300 dead points [03:00, 114.38 dead points/s]Dead points: 21000 dead points [03:06, 114.40 dead points/s]Dead points: 21700 dead points [03:12, 114.38 dead points/s]Dead points: 22400 dead points [03:18, 114.38 dead points/s]Dead points: 23100 dead points [03:25, 114.43 dead points/s]Dead points: 23800 dead points [03:31, 114.50 dead points/s]Dead points: 24500 dead points [03:37, 114.54 dead points/s]Dead points: 25200 dead points [03:43, 114.72 dead points/s]Dead points: 25900 dead points [03:49, 114.71 dead points/s]Dead points: 26600 dead points [03:55, 114.84 dead points/s]Dead points: 27300 dead points [04:01, 114.85 dead points/s]Dead points: 28000 dead points [04:07, 114.99 dead points/s]Dead points: 28700 dead points [04:13, 115.04 dead points/s]Dead points: 29400 dead points [04:19, 115.12 dead points/s]Dead points: 30100 dead points [04:25, 115.07 dead points/s]Dead points: 30800 dead points [04:32, 115.16 dead points/s]Dead points: 31500 dead points [04:38, 115.22 dead points/s]Dead points: 32200 dead points [04:44, 115.29 dead points/s]Dead points: 32900 dead points [04:50, 115.23 dead points/s]Dead points: 33600 dead points [04:56, 115.25 dead points/s]Dead points: 34300 dead points [05:02, 115.26 dead points/s]Dead points: 35000 dead points [05:08, 115.25 dead points/s]Dead points: 35700 dead points [05:14, 115.25 dead points/s]Dead points: 36400 dead points [05:20, 115.29 dead points/s]Dead points: 37100 dead points [05:26, 115.27 dead points/s]Dead points: 37800 dead points [05:32, 115.30 dead points/s]Dead points: 38500 dead points [05:38, 115.31 dead points/s]Dead points: 39200 dead points [05:44, 115.30 dead points/s]Dead points: 39200 dead points [05:44, 113.66 dead points/s]
+========================================
+End time:     Mon Mar 30 08:10:58 PM UTC 2026
+Exit code:    0
+========================================

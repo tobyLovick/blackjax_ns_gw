@@ -1,0 +1,25 @@
+
+ArgumentError: activate does not accept more than one argument:
+['python', 'blackjax_gw150914.py', '--notch']
+
+
+========================================
+Job ID:       3512844
+Job Name:     run.sh
+Node:         nid011006
+GPUs:         1
+Start time:   Tue Mar 31 11:21:06 AM UTC 2026
+Working dir:  /home/u6bn/lovick.u6bn/GW/src
+Command:      python blackjax_gw150914.py --notch
+Python:       /home/u6bn/lovick.u6bn/miniforge3/envs/lao/bin/python
+========================================
+Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:09, 72.56 dead points/s]Dead points: 1400 dead points [00:19, 70.37 dead points/s]Dead points: 2100 dead points [00:24, 90.61 dead points/s]Dead points: 2800 dead points [00:30, 100.22 dead points/s]Dead points: 3500 dead points [00:36, 106.41 dead points/s]Dead points: 4200 dead points [00:42, 110.54 dead points/s]Dead points: 4900 dead points [00:48, 113.31 dead points/s]Dead points: 5600 dead points [00:54, 115.26 dead points/s]Dead points: 6300 dead points [01:00, 116.56 dead points/s]Dead points: 7000 dead points [01:05, 117.50 dead points/s]Dead points: 7700 dead points [01:11, 118.12 dead points/s]Dead points: 8400 dead points [01:17, 118.60 dead points/s]Dead points: 9100 dead points [01:23, 118.79 dead points/s]Dead points: 9800 dead points [01:29, 119.10 dead points/s]Dead points: 10500 dead points [01:35, 119.20 dead points/s]Dead points: 11200 dead points [01:40, 119.37 dead points/s]Dead points: 11900 dead points [01:46, 119.45 dead points/s]Dead points: 12600 dead points [01:52, 119.52 dead points/s]Dead points: 13300 dead points [01:58, 119.59 dead points/s]Dead points: 14000 dead points [02:04, 119.68 dead points/s]Dead points: 14700 dead points [02:10, 119.73 dead points/s]Dead points: 15400 dead points [02:16, 119.86 dead points/s]Dead points: 16100 dead points [02:21, 119.85 dead points/s]Dead points: 16800 dead points [02:27, 119.96 dead points/s]Dead points: 17500 dead points [02:33, 119.96 dead points/s]Dead points: 18200 dead points [02:39, 120.05 dead points/s]Dead points: 18900 dead points [02:45, 120.14 dead points/s]Dead points: 19600 dead points [02:50, 120.32 dead points/s]Dead points: 20300 dead points [02:56, 120.32 dead points/s]Dead points: 21000 dead points [03:02, 120.50 dead points/s]Dead points: 21700 dead points [03:08, 120.62 dead points/s]Dead points: 22400 dead points [03:14, 120.77 dead points/s]Dead points: 23100 dead points [03:19, 120.82 dead points/s]Dead points: 23800 dead points [03:25, 120.88 dead points/s]Dead points: 24500 dead points [03:31, 120.91 dead points/s]Dead points: 25200 dead points [03:37, 121.03 dead points/s]Dead points: 25900 dead points [03:43, 121.02 dead points/s]Dead points: 26600 dead points [03:48, 121.07 dead points/s]Dead points: 27300 dead points [03:54, 121.02 dead points/s]Dead points: 28000 dead points [04:00, 121.08 dead points/s]Dead points: 28700 dead points [04:06, 121.10 dead points/s]Dead points: 29400 dead points [04:11, 121.13 dead points/s]Dead points: 30100 dead points [04:17, 121.12 dead points/s]Dead points: 30800 dead points [04:23, 121.19 dead points/s]Dead points: 31500 dead points [04:29, 121.06 dead points/s]Dead points: 32200 dead points [04:35, 121.11 dead points/s]Dead points: 32900 dead points [04:40, 121.03 dead points/s]Dead points: 33600 dead points [04:46, 121.12 dead points/s]Dead points: 33600 dead points [04:46, 117.22 dead points/s]
+Traceback (most recent call last):
+  File "/home/u6bn/lovick.u6bn/GW/src/blackjax_gw150914.py", line 259, in <module>
+    with open(f'blackjaxns_gw150914{suffix}_final_state.pkl', 'wb') as f:
+                                    ^^^^^^
+NameError: name 'suffix' is not defined
+========================================
+End time:     Tue Mar 31 11:26:29 AM UTC 2026
+Exit code:    1
+========================================
