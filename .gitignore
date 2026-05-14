@@ -128,3 +128,7 @@ src/*
 !src/blackjax_alcs_quad_gw150914.py
 !src/blackjax_bad_quad_gw150914.py
 !src/test_alcs_quadrature.py
+
+# General multi-event scripts
+!src/fetch_gw.py
+!src/blackjax_gw_all.py
