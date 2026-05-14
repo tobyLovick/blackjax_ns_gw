@@ -14,20 +14,20 @@ EVENTS = {
 }
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--event', required=True, choices=list(EVENTS.keys()))
+parser.add_argument('--event', default='all', choices=list(EVENTS.keys()) + ['all'])
 args = parser.parse_args()
 
-gps  = EVENTS[args.event]
-name = args.event.lower()
+to_fetch = list(EVENTS.keys()) if args.event == 'all' else [args.event]
 
-print(f"Fetching {args.event} (GPS={gps})...")
-H1.load_data(gps, 2, 2, 20.0, 1024.0, psd_pad=16, tukey_alpha=0.2)
-L1.load_data(gps, 2, 2, 20.0, 1024.0, psd_pad=16, tukey_alpha=0.2)
-
-np.save(f'{name}_frequencies.npy', np.array(H1.frequencies))
-np.save(f'{name}_H1_strain.npy',   np.array(H1.data))
-np.save(f'{name}_L1_strain.npy',   np.array(L1.data))
-np.save(f'{name}_H1_psd.npy',      np.array(H1.psd))
-np.save(f'{name}_L1_psd.npy',      np.array(L1.psd))
-
-print(f"Done. {len(H1.frequencies)} bins, {H1.frequencies[0]:.1f}–{H1.frequencies[-1]:.1f} Hz")
+for event in to_fetch:
+    gps  = EVENTS[event]
+    name = event.lower()
+    print(f"Fetching {event} (GPS={gps})...")
+    H1.load_data(gps, 2, 2, 20.0, 1024.0, psd_pad=16, tukey_alpha=0.2)
+    L1.load_data(gps, 2, 2, 20.0, 1024.0, psd_pad=16, tukey_alpha=0.2)
+    np.save(f'{name}_frequencies.npy', np.array(H1.frequencies))
+    np.save(f'{name}_H1_strain.npy',   np.array(H1.data))
+    np.save(f'{name}_L1_strain.npy',   np.array(L1.data))
+    np.save(f'{name}_H1_psd.npy',      np.array(H1.psd))
+    np.save(f'{name}_L1_psd.npy',      np.array(L1.psd))
+    print(f"  Done. {len(H1.frequencies)} bins, {H1.frequencies[0]:.1f}–{H1.frequencies[-1]:.1f} Hz")
