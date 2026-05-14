@@ -1,20 +1,0 @@
-
-ArgumentError: activate does not accept more than one argument:
-['python', 'blackjax_alcs_gw150914.py']
-
-
-========================================
-Job ID:       3512710
-Job Name:     run.sh
-Node:         nid010234
-GPUs:         1
-Start time:   Tue Mar 31 11:05:23 AM UTC 2026
-Working dir:  /home/u6bn/lovick.u6bn/GW/src
-Command:      python blackjax_alcs_gw150914.py
-Python:       /home/u6bn/lovick.u6bn/miniforge3/envs/lao/bin/python
-========================================
-Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:09, 72.04 dead points/s]Dead points: 1400 dead points [00:17, 79.56 dead points/s]Dead points: 2100 dead points [00:19, 131.63 dead points/s]Dead points: 2800 dead points [00:20, 192.82 dead points/s]Dead points: 3500 dead points [00:21, 257.11 dead points/s]Dead points: 4200 dead points [00:22, 316.79 dead points/s]Dead points: 4900 dead points [00:24, 303.12 dead points/s]Dead points: 5600 dead points [00:32, 177.95 dead points/s]Dead points: 6300 dead points [00:39, 139.42 dead points/s]Dead points: 7000 dead points [00:47, 121.51 dead points/s]Dead points: 7700 dead points [00:54, 111.56 dead points/s]Dead points: 8400 dead points [01:02, 105.57 dead points/s]Dead points: 9100 dead points [01:09, 101.67 dead points/s]Dead points: 9800 dead points [01:17, 98.95 dead points/s] Dead points: 10500 dead points [01:24, 97.01 dead points/s]Dead points: 11200 dead points [01:32, 95.57 dead points/s]Dead points: 11900 dead points [01:39, 94.66 dead points/s]Dead points: 12600 dead points [01:47, 93.98 dead points/s]Dead points: 13300 dead points [01:54, 93.56 dead points/s]Dead points: 14000 dead points [02:02, 93.36 dead points/s]Dead points: 14700 dead points [02:09, 93.34 dead points/s]Dead points: 15400 dead points [02:17, 93.52 dead points/s]Dead points: 16100 dead points [02:24, 93.60 dead points/s]Dead points: 16800 dead points [02:32, 93.72 dead points/s]Dead points: 17500 dead points [02:39, 93.74 dead points/s]Dead points: 18200 dead points [02:47, 93.80 dead points/s]Dead points: 18900 dead points [02:54, 93.87 dead points/s]Dead points: 19600 dead points [03:02, 93.98 dead points/s]Dead points: 20300 dead points [03:09, 94.03 dead points/s]Dead points: 21000 dead points [03:16, 94.11 dead points/s]Dead points: 21700 dead points [03:24, 94.16 dead points/s]Dead points: 22400 dead points [03:31, 94.23 dead points/s]Dead points: 23100 dead points [03:39, 94.25 dead points/s]Dead points: 23800 dead points [03:46, 94.32 dead points/s]Dead points: 24500 dead points [03:53, 94.49 dead points/s]Dead points: 25200 dead points [04:01, 94.60 dead points/s]Dead points: 25900 dead points [04:08, 94.71 dead points/s]Dead points: 26600 dead points [04:16, 94.79 dead points/s]Dead points: 27300 dead points [04:23, 94.89 dead points/s]Dead points: 28000 dead points [04:30, 94.98 dead points/s]Dead points: 28700 dead points [04:38, 95.05 dead points/s]Dead points: 29400 dead points [04:45, 95.10 dead points/s]Dead points: 30100 dead points [04:52, 95.14 dead points/s]Dead points: 30800 dead points [05:00, 95.22 dead points/s]Dead points: 31500 dead points [05:07, 95.34 dead points/s]Dead points: 32200 dead points [05:14, 95.50 dead points/s]Dead points: 32900 dead points [05:22, 95.64 dead points/s]Dead points: 33600 dead points [05:29, 95.74 dead points/s]Dead points: 34300 dead points [05:36, 95.86 dead points/s]Dead points: 35000 dead points [05:43, 95.99 dead points/s]Dead points: 35700 dead points [05:51, 96.06 dead points/s]Dead points: 36400 dead points [05:58, 96.14 dead points/s]Dead points: 37100 dead points [06:05, 96.17 dead points/s]Dead points: 37800 dead points [06:13, 96.22 dead points/s]Dead points: 38500 dead points [06:20, 96.23 dead points/s]Dead points: 39200 dead points [06:27, 96.31 dead points/s]Dead points: 39900 dead points [06:34, 96.48 dead points/s]Dead points: 39900 dead points [06:34, 101.07 dead points/s]
-========================================
-End time:     Tue Mar 31 11:12:36 AM UTC 2026
-Exit code:    0
-========================================

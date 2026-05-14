@@ -1,21 +1,0 @@
-
-ArgumentError: activate does not accept more than one argument:
-['python', 'blackjax_bad_gw150914.py', '--mode', 'bad']
-
-
-========================================
-Job ID:       4476420
-Job Name:     run.sh
-Node:         nid010713
-GPUs:         1
-Start time:   Thu May  7 11:32:03 AM UTC 2026
-Working dir:  /home/u6hj/lovick.u6hj/GW/src
-Command:      python blackjax_bad_gw150914.py --mode bad
-Python:       /home/u6hj/lovick.u6hj/miniforge3/envs/lao/bin/python
-========================================
-Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:09, 73.35 dead points/s]Dead points: 1400 dead points [00:17, 80.49 dead points/s]Dead points: 2100 dead points [00:18, 135.34 dead points/s]Dead points: 2800 dead points [00:19, 201.99 dead points/s]Dead points: 3500 dead points [00:20, 285.18 dead points/s]Dead points: 4200 dead points [00:21, 352.07 dead points/s]Dead points: 4900 dead points [00:23, 318.23 dead points/s]Dead points: 5600 dead points [00:27, 249.39 dead points/s]Dead points: 6300 dead points [00:33, 186.09 dead points/s]Dead points: 7000 dead points [00:39, 158.76 dead points/s]Dead points: 7700 dead points [00:45, 144.22 dead points/s]Dead points: 8400 dead points [00:51, 135.69 dead points/s]Dead points: 9100 dead points [00:57, 130.26 dead points/s]Dead points: 9800 dead points [01:03, 126.82 dead points/s]Dead points: 10500 dead points [01:08, 124.52 dead points/s]Dead points: 11200 dead points [01:14, 122.98 dead points/s]Dead points: 11900 dead points [01:20, 121.94 dead points/s]Dead points: 12600 dead points [01:26, 121.22 dead points/s]Dead points: 13300 dead points [01:32, 120.71 dead points/s]Dead points: 14000 dead points [01:38, 120.37 dead points/s]Dead points: 14700 dead points [01:44, 120.16 dead points/s]Dead points: 15400 dead points [01:49, 120.02 dead points/s]Dead points: 16100 dead points [01:55, 119.90 dead points/s]Dead points: 16800 dead points [02:01, 119.86 dead points/s]Dead points: 17500 dead points [02:07, 119.86 dead points/s]Dead points: 18200 dead points [02:13, 119.83 dead points/s]Dead points: 18900 dead points [02:19, 119.83 dead points/s]Dead points: 19600 dead points [02:25, 119.81 dead points/s]Dead points: 20300 dead points [02:30, 119.83 dead points/s]Dead points: 21000 dead points [02:36, 119.88 dead points/s]Dead points: 21700 dead points [02:42, 119.90 dead points/s]Dead points: 22400 dead points [02:48, 119.92 dead points/s]Dead points: 23100 dead points [02:54, 119.94 dead points/s]Dead points: 23800 dead points [03:00, 120.01 dead points/s]Dead points: 24500 dead points [03:05, 120.12 dead points/s]Dead points: 25200 dead points [03:11, 120.23 dead points/s]Dead points: 25900 dead points [03:17, 120.33 dead points/s]Dead points: 26600 dead points [03:23, 120.37 dead points/s]Dead points: 27300 dead points [03:29, 120.46 dead points/s]Dead points: 28000 dead points [03:34, 120.53 dead points/s]Dead points: 28700 dead points [03:40, 120.59 dead points/s]Dead points: 29400 dead points [03:46, 120.64 dead points/s]Dead points: 30100 dead points [03:52, 120.67 dead points/s]Dead points: 30800 dead points [03:58, 120.71 dead points/s]Dead points: 31500 dead points [04:03, 120.74 dead points/s]Dead points: 32200 dead points [04:09, 120.76 dead points/s]Dead points: 32900 dead points [04:15, 120.78 dead points/s]Dead points: 33600 dead points [04:21, 120.79 dead points/s]Dead points: 34300 dead points [04:27, 120.80 dead points/s]Dead points: 35000 dead points [04:32, 120.82 dead points/s]Dead points: 35700 dead points [04:38, 120.86 dead points/s]Dead points: 36400 dead points [04:44, 120.90 dead points/s]Dead points: 36400 dead points [04:44, 127.99 dead points/s]
-Saved blackjaxns_bad_gw150914.csv   logZ = 823964.72
-========================================
-End time:     Thu May  7 11:37:28 AM UTC 2026
-Exit code:    0
-========================================

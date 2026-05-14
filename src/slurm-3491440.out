@@ -1,20 +1,0 @@
-
-ArgumentError: activate does not accept more than one argument:
-['python', 'blackjax_alcs_4s.py']
-
-
-========================================
-Job ID:       3491440
-Job Name:     run.sh
-Node:         nid010479
-GPUs:         1
-Start time:   Mon Mar 30 10:14:33 PM UTC 2026
-Working dir:  /home/u6bn/lovick.u6bn/GW/src
-Command:      python blackjax_alcs_4s.py
-Python:       /home/u6bn/lovick.u6bn/miniforge3/envs/lao/bin/python
-========================================
-Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:10, 63.81 dead points/s]Dead points: 1400 dead points [00:22, 62.70 dead points/s]Dead points: 2100 dead points [00:27, 84.08 dead points/s]Dead points: 2800 dead points [00:35, 86.03 dead points/s]Dead points: 3500 dead points [00:44, 79.79 dead points/s]Dead points: 4200 dead points [00:54, 76.28 dead points/s]Dead points: 4900 dead points [01:04, 74.19 dead points/s]Dead points: 5600 dead points [01:14, 72.76 dead points/s]Dead points: 6300 dead points [01:24, 71.73 dead points/s]Dead points: 7000 dead points [01:35, 70.93 dead points/s]Dead points: 7700 dead points [01:45, 70.29 dead points/s]Dead points: 8400 dead points [01:55, 69.74 dead points/s]Dead points: 9100 dead points [02:05, 69.27 dead points/s]Dead points: 9800 dead points [02:16, 68.87 dead points/s]Dead points: 10500 dead points [02:26, 68.65 dead points/s]Dead points: 11200 dead points [02:36, 68.44 dead points/s]Dead points: 11900 dead points [02:46, 68.31 dead points/s]Dead points: 12600 dead points [02:57, 68.27 dead points/s]Dead points: 13300 dead points [03:07, 68.22 dead points/s]Dead points: 14000 dead points [03:17, 68.20 dead points/s]Dead points: 14700 dead points [03:27, 68.17 dead points/s]Dead points: 15400 dead points [03:38, 68.16 dead points/s]Dead points: 16100 dead points [03:48, 68.20 dead points/s]Dead points: 16800 dead points [03:58, 68.41 dead points/s]Dead points: 17500 dead points [04:08, 68.78 dead points/s]Dead points: 18200 dead points [04:18, 69.04 dead points/s]Dead points: 18900 dead points [04:28, 69.28 dead points/s]Dead points: 19600 dead points [04:38, 69.51 dead points/s]Dead points: 20300 dead points [04:48, 69.68 dead points/s]Dead points: 21000 dead points [04:58, 69.83 dead points/s]Dead points: 21700 dead points [05:08, 69.97 dead points/s]Dead points: 22400 dead points [05:18, 70.17 dead points/s]Dead points: 23100 dead points [05:28, 70.32 dead points/s]Dead points: 23800 dead points [05:38, 70.52 dead points/s]Dead points: 24500 dead points [05:48, 70.72 dead points/s]Dead points: 25200 dead points [05:57, 70.97 dead points/s]Dead points: 25900 dead points [06:07, 71.24 dead points/s]Dead points: 26600 dead points [06:17, 71.60 dead points/s]Dead points: 27300 dead points [06:26, 72.08 dead points/s]Dead points: 28000 dead points [06:36, 72.57 dead points/s]Dead points: 28700 dead points [06:45, 72.92 dead points/s]Dead points: 29400 dead points [06:55, 73.21 dead points/s]Dead points: 30100 dead points [07:04, 73.43 dead points/s]Dead points: 30800 dead points [07:14, 73.54 dead points/s]Dead points: 31500 dead points [07:23, 73.66 dead points/s]Dead points: 32200 dead points [07:33, 73.69 dead points/s]Dead points: 32900 dead points [07:42, 73.78 dead points/s]Dead points: 33600 dead points [07:52, 73.82 dead points/s]Dead points: 34300 dead points [08:01, 73.86 dead points/s]Dead points: 35000 dead points [08:11, 73.92 dead points/s]Dead points: 35700 dead points [08:20, 73.92 dead points/s]Dead points: 36400 dead points [08:30, 73.97 dead points/s]Dead points: 37100 dead points [08:39, 74.01 dead points/s]Dead points: 37800 dead points [08:48, 74.06 dead points/s]Dead points: 38500 dead points [08:58, 74.08 dead points/s]Dead points: 39200 dead points [09:07, 74.09 dead points/s]Dead points: 39200 dead points [09:07, 71.55 dead points/s]
-========================================
-End time:     Mon Mar 30 10:24:20 PM UTC 2026
-Exit code:    0
-========================================

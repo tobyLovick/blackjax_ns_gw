@@ -1,20 +1,0 @@
-
-ArgumentError: activate does not accept more than one argument:
-['python', 'blackjax_gw150914.py', '--notch']
-
-
-========================================
-Job ID:       3513064
-Job Name:     run.sh
-Node:         nid010005
-GPUs:         1
-Start time:   Tue Mar 31 11:31:32 AM UTC 2026
-Working dir:  /home/u6bn/lovick.u6bn/GW/src
-Command:      python blackjax_gw150914.py --notch
-Python:       /home/u6bn/lovick.u6bn/miniforge3/envs/lao/bin/python
-========================================
-Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:09, 71.26 dead points/s]Dead points: 1400 dead points [00:19, 71.56 dead points/s]Dead points: 2100 dead points [00:24, 91.49 dead points/s]Dead points: 2800 dead points [00:30, 100.47 dead points/s]Dead points: 3500 dead points [00:36, 106.39 dead points/s]Dead points: 4200 dead points [00:42, 110.15 dead points/s]Dead points: 4900 dead points [00:48, 112.71 dead points/s]Dead points: 5600 dead points [00:54, 114.44 dead points/s]Dead points: 6300 dead points [01:00, 115.73 dead points/s]Dead points: 7000 dead points [01:06, 116.50 dead points/s]Dead points: 7700 dead points [01:11, 117.20 dead points/s]Dead points: 8400 dead points [01:17, 117.54 dead points/s]Dead points: 9100 dead points [01:23, 117.90 dead points/s]Dead points: 9800 dead points [01:29, 118.06 dead points/s]Dead points: 10500 dead points [01:35, 118.31 dead points/s]Dead points: 11200 dead points [01:41, 118.38 dead points/s]Dead points: 11900 dead points [01:47, 118.55 dead points/s]Dead points: 12600 dead points [01:53, 118.58 dead points/s]Dead points: 13300 dead points [01:59, 118.72 dead points/s]Dead points: 14000 dead points [02:05, 118.72 dead points/s]Dead points: 14700 dead points [02:10, 118.85 dead points/s]Dead points: 15400 dead points [02:16, 118.84 dead points/s]Dead points: 16100 dead points [02:22, 118.95 dead points/s]Dead points: 16800 dead points [02:28, 118.96 dead points/s]Dead points: 17500 dead points [02:34, 119.03 dead points/s]Dead points: 18200 dead points [02:40, 119.04 dead points/s]Dead points: 18900 dead points [02:46, 119.16 dead points/s]Dead points: 19600 dead points [02:52, 119.22 dead points/s]Dead points: 20300 dead points [02:57, 119.33 dead points/s]Dead points: 21000 dead points [03:03, 119.41 dead points/s]Dead points: 21700 dead points [03:09, 119.60 dead points/s]Dead points: 22400 dead points [03:15, 119.66 dead points/s]Dead points: 23100 dead points [03:21, 119.79 dead points/s]Dead points: 23800 dead points [03:27, 119.81 dead points/s]Dead points: 24500 dead points [03:32, 119.88 dead points/s]Dead points: 25200 dead points [03:38, 119.88 dead points/s]Dead points: 25900 dead points [03:44, 119.97 dead points/s]Dead points: 26600 dead points [03:50, 119.90 dead points/s]Dead points: 27300 dead points [03:56, 120.01 dead points/s]Dead points: 28000 dead points [04:02, 119.96 dead points/s]Dead points: 28700 dead points [04:07, 119.97 dead points/s]Dead points: 29400 dead points [04:13, 119.96 dead points/s]Dead points: 30100 dead points [04:19, 119.96 dead points/s]Dead points: 30800 dead points [04:25, 120.02 dead points/s]Dead points: 31500 dead points [04:31, 120.09 dead points/s]Dead points: 32200 dead points [04:37, 120.03 dead points/s]Dead points: 32900 dead points [04:42, 120.09 dead points/s]Dead points: 33600 dead points [04:48, 120.05 dead points/s]Dead points: 33600 dead points [04:48, 116.37 dead points/s]
-========================================
-End time:     Tue Mar 31 11:36:59 AM UTC 2026
-Exit code:    0
-========================================

@@ -1,21 +1,0 @@
-
-ArgumentError: activate does not accept more than one argument:
-['python', 'blackjax_bad_gw150914.py', '--mode', 'alcs_bad']
-
-
-========================================
-Job ID:       4428157
-Job Name:     run.sh
-Node:         nid010084
-GPUs:         1
-Start time:   Thu Apr 30 02:27:49 PM UTC 2026
-Working dir:  /home/u6hj/lovick.u6hj/GW/src
-Command:      python blackjax_bad_gw150914.py --mode alcs_bad
-Python:       /home/u6hj/lovick.u6hj/miniforge3/envs/lao/bin/python
-========================================
-Dead points: 0 dead points [00:00, ? dead points/s]Dead points: 700 dead points [00:10, 66.55 dead points/s]Dead points: 1400 dead points [00:18, 75.22 dead points/s]Dead points: 2100 dead points [00:20, 122.93 dead points/s]Dead points: 2800 dead points [00:21, 179.06 dead points/s]Dead points: 3500 dead points [00:22, 242.24 dead points/s]Dead points: 4200 dead points [00:23, 299.36 dead points/s]Dead points: 4900 dead points [00:25, 354.97 dead points/s]Dead points: 5600 dead points [00:26, 414.50 dead points/s]Dead points: 6300 dead points [00:27, 459.80 dead points/s]Dead points: 7000 dead points [00:28, 499.50 dead points/s]Dead points: 7700 dead points [00:29, 545.07 dead points/s]Dead points: 8400 dead points [00:30, 569.87 dead points/s]Dead points: 9100 dead points [00:31, 600.31 dead points/s]Dead points: 9800 dead points [00:32, 613.12 dead points/s]Dead points: 10500 dead points [00:33, 617.49 dead points/s]Dead points: 11200 dead points [00:34, 632.43 dead points/s]Dead points: 11900 dead points [00:35, 643.38 dead points/s]Dead points: 12600 dead points [00:36, 645.21 dead points/s]Dead points: 13300 dead points [00:38, 656.40 dead points/s]Dead points: 14000 dead points [00:39, 619.64 dead points/s]Dead points: 14700 dead points [00:40, 579.26 dead points/s]Dead points: 14700 dead points [00:40, 361.32 dead points/s]
-Saved blackjaxns_alcs_bad_gw150914.csv   logZ = 889368.32
-========================================
-End time:     Thu Apr 30 02:28:56 PM UTC 2026
-Exit code:    0
-========================================

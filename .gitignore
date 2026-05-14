@@ -55,6 +55,7 @@ src/*
 # Include essential directories
 !src/custom_kernels/
 !src/injection_plots/
+!src/logs/
 
 # Include essential 4s data files
 !src/4s_*.npy
