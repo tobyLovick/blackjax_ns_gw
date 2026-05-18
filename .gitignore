@@ -45,90 +45,26 @@ paper/figures/speedup_comparison.pdf
 # Old kernel directory (kept locally for reference)
 src/custom_ns_kernels/
 
-# Old script files (kept locally for reference)
-src/bilbykernel_unitcube_4s.py
-src/bilby_injections_priorloop.py
-
-# Exclude everything from src/ except essential files
+# Exclude everything from src/ by default, then whitelist by type
 src/*
 
-# Include essential directories
+# All Python and shell scripts are tracked
+!src/*.py
+!src/*.sh
+
+# Noise curves
+!src/*.txt
+
+# Essential directories
 !src/custom_kernels/
 !src/injection_plots/
 !src/logs/
 
-# Include essential 4s data files
+# 4s synthetic data and masks
 !src/4s_*.npy
 !src/4s_*.pkl
 
-# Include noise curve files
-!src/AdV_asd.txt
-!src/aLIGO_O4_high_asd.txt
+# GW150914 real-data masks
+!src/gw150914_notch_mask_*.npy
 
-# Include essential python scripts
-!src/bilby_4s.py
-!src/bilby_injections.py
-!src/blackjax_4s.py
-!src/blackjax_injections.py
-!src/example.py
-!src/example_newAPI.py
-!src/plot_4s.py
-
-# GW150914 real-data scripts
-!src/fetch_gw150914.py
-!src/blackjax_gw150914.py
-!src/blackjax_alcs_gw150914.py
-!src/blackjax_invg_gw150914.py
-!src/blackjax_bad_gw150914.py
-!src/blackjax_gw150914_norm.py
-!src/plot_all_gw150914.py
-!src/plot_gw150914_data.py
-!src/plot_alcs_psd_posterior.py
-!src/plot_alcs_sigma_posterior.py
-!src/alcs_is_correction.py
-!src/alcs_is_diagnostic.py
-!src/residuals_diagnostic.py
-!src/plot_per_bin_BoverS.py
-!src/plot_BoverS_H1_vs_L1.py
-!src/plot_anomaly_detection.py
-!src/plot_deltalogL_vs_BoverS.py
-!src/gw150914_notch_mask_H1.npy
-!src/gw150914_notch_mask_L1.npy
-!src/gw150914_notch_mask_H1_t10.npy
-!src/gw150914_notch_mask_L1_t10.npy
-!src/gw150914_notch_mask_H1_posterior.npy
-!src/gw150914_notch_mask_L1_posterior.npy
-
-# 4s norm and ALCS scripts
-!src/blackjax_4s_norm.py
-!src/blackjax_alcs_4s.py
-!src/blackjax_invg_4s.py
-
-# Notch mask scripts
-!src/compute_notch_mask.py
-!src/compute_notch_mask_4s.py
-!src/compute_posterior_notch_mask.py
-!src/compute_posterior_notch_mask_4s.py
-
-# 4s notch masks
-!src/4s_notch_mask_H1.npy
-!src/4s_notch_mask_L1.npy
-!src/4s_notch_mask_V1.npy
-!src/4s_notch_mask_H1_t10.npy
-!src/4s_notch_mask_L1_t10.npy
-!src/4s_notch_mask_V1_t10.npy
-!src/4s_notch_mask_H1_posterior.npy
-!src/4s_notch_mask_L1_posterior.npy
-!src/4s_notch_mask_V1_posterior.npy
-
-# SLURM submission script
-!src/submit_all.sh
-
-# Quadrature versions and benchmarks
-!src/blackjax_alcs_quad_gw150914.py
-!src/blackjax_bad_quad_gw150914.py
-!src/test_alcs_quadrature.py
-
-# General multi-event scripts
-!src/fetch_gw.py
-!src/blackjax_gw_all.py
+# Result CSVs are local-only — do not add .csv exceptions here
