@@ -15,7 +15,7 @@ import argparse
 import numpy as np
 import requests
 
-CATALOG_URL = "https://gw-openscience.org/eventapi/json/GWTC-3-confident/"
+CATALOG_URL = "https://gwosc.org/eventapi/json/GWTC-3-confident/"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--pastro', type=float, default=0.99,
@@ -27,11 +27,7 @@ args = parser.parse_args()
 print(f"Fetching {CATALOG_URL} ...")
 r = requests.get(CATALOG_URL, timeout=30)
 r.raise_for_status()
-data = r.json()
-
-# GWOSC returns {"events": {"GW190521-074359": {...}, ...}}
-# Each entry may have a "commonName" field with the canonical name.
-events_raw = data.get('events', data)  # fallback if top-level is flat
+events_raw = r.json().get('events', r.json())
 
 catalog = {}
 n_skipped_type   = 0
@@ -39,51 +35,58 @@ n_skipped_pastro = 0
 n_skipped_nomc   = 0
 
 for key, ev in events_raw.items():
-    # Canonical name (e.g. "GW190521") preferred over catalog key
     name = ev.get('commonName', key)
 
-    # --- type filter ---
-    ev_type = ev.get('type', ev.get('classification', ''))
-    if 'BBH' not in str(ev_type):
+    # --- BBH filter: lighter component above NS mass threshold ---
+    # GWOSC has no explicit 'type' field; m2_source > 3 Msun means both are BHs
+    m2 = ev.get('mass_2_source', None)
+    if m2 is None or float(m2) < 3.0:
         n_skipped_type += 1
         continue
 
     # --- p_astro filter ---
-    pastro = float(ev.get('p_astro', ev.get('pastro', 0.0)))
+    pastro = float(ev.get('p_astro', 0.0) or 0.0)
     if pastro < args.pastro:
         n_skipped_pastro += 1
         continue
 
     # --- GPS ---
-    gps = float(ev.get('GPS', ev.get('gps', 0.0)))
+    gps = float(ev.get('GPS', 0.0))
 
-    # --- chirp mass and 90% CI ---
-    # Try source-frame first, then detector-frame
-    mc       = ev.get('chirp_mass_source',       ev.get('chirp_mass',       None))
-    mc_lower = ev.get('chirp_mass_source_lower',  ev.get('chirp_mass_lower',  None))
-    mc_upper = ev.get('chirp_mass_source_upper',  ev.get('chirp_mass_upper',  None))
+    # --- chirp mass ---
+    # API returns lower/upper as signed offsets from the median (e.g. -4.0 means mc-4)
+    mc       = ev.get('chirp_mass_source', ev.get('chirp_mass', None))
+    mc_lower = ev.get('chirp_mass_source_lower', ev.get('chirp_mass_lower', None))
+    mc_upper = ev.get('chirp_mass_source_upper', ev.get('chirp_mass_upper', None))
 
     if mc is None:
         print(f"  WARNING: no chirp mass for {name} — skipping")
         n_skipped_nomc += 1
         continue
 
-    mc       = float(mc)
-    mc_lower = float(mc_lower) if mc_lower is not None else 0.7 * mc
-    mc_upper = float(mc_upper) if mc_upper is not None else 1.3 * mc
+    mc = float(mc)
+    mc_lower = mc + float(mc_lower) if mc_lower is not None else 0.7 * mc
+    mc_upper = mc + float(mc_upper) if mc_upper is not None else 1.3 * mc
 
     # Prior range: 2× the 90% CI half-width on each side, floored at 1 Msun
-    half_up   = mc_upper - mc
-    half_down = mc - mc_lower
-    half      = max(half_up, half_down, 0.1 * mc)   # at least 10% of mc
+    half = max(mc_upper - mc, mc - mc_lower, 0.1 * mc)
     mc_low  = max(mc - 2.0 * half, 1.0)
     mc_high = mc + 2.0 * half
 
-    # --- detectors ---
-    ifos_str   = ev.get('ifos', ev.get('instruments', 'H1,L1'))
-    detectors  = [d.strip() for d in str(ifos_str).replace(' ', '').split(',')]
-    # Normalise names just in case
-    detectors  = [d for d in detectors if d in ('H1', 'L1', 'V1', 'K1')]
+    # --- detectors: fetch per-event JSON and read from strain list ---
+    jsonurl = ev.get('jsonurl', '')
+    detectors = []
+    if jsonurl:
+        try:
+            ev_detail = requests.get(jsonurl, timeout=30).json()
+            ev_inner  = next(iter(ev_detail.get('events', {}).values()), {})
+            strain    = ev_inner.get('strain', [])
+            detectors = sorted({s['detector'] for s in strain
+                                if s.get('detector') in ('H1', 'L1', 'V1', 'K1')})
+        except Exception as exc:
+            print(f"  WARNING: could not fetch {jsonurl}: {exc}")
+    if not detectors:
+        detectors = ['H1', 'L1']   # safe fallback
 
     catalog[name] = {
         'gps':       gps,
@@ -93,7 +96,7 @@ for key, ev in events_raw.items():
         'detectors': detectors,
         'pastro':    round(pastro,  4),
     }
-    print(f"  {name:16s}  GPS={gps:.1f}  "
+    print(f"  {name:20s}  GPS={gps:.1f}  "
           f"Mc={mc:.2f} [{mc_low:.1f},{mc_high:.1f}] Msun  "
           f"dets={detectors}  p_astro={pastro:.4f}")
 
@@ -103,15 +106,13 @@ print(f"  Skipped: {n_skipped_type} non-BBH, "
       f"{n_skipped_pastro} low p_astro (<{args.pastro}), "
       f"{n_skipped_nomc} no Mc")
 
-# Save ordered by GPS time so --idx gives chronological order
 catalog_sorted = dict(sorted(catalog.items(), key=lambda x: x[1]['gps']))
 
 np.save(args.out, catalog_sorted, allow_pickle=True)
 print(f"\nSaved {len(catalog_sorted)} events → {args.out}")
 print("Load with: catalog = np.load('o3_catalog.npy', allow_pickle=True).item()")
 
-# Print a quick index table
-print(f"\n{'IDX':>4}  {'Event':16s}  {'GPS':>14}  Mc range")
-for idx, (name, ev) in enumerate(catalog_sorted.items()):
-    print(f"  {idx:2d}   {name:16s}  {ev['gps']:14.1f}  "
-          f"[{ev['mc_low']:.1f}, {ev['mc_high']:.1f}]")
+print(f"\n{'IDX':>4}  {'Event':20s}  {'GPS':>14}  {'Dets':12s}  Mc range")
+for idx, (n, e) in enumerate(catalog_sorted.items()):
+    print(f"  {idx:2d}   {n:20s}  {e['gps']:14.1f}  "
+          f"{','.join(e['detectors']):12s}  [{e['mc_low']:.1f}, {e['mc_high']:.1f}]")
