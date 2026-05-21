@@ -119,6 +119,54 @@ _gh_x_np, _gh_w_np = np.polynomial.hermite.hermgauss(20)
 GH_X    = jnp.array(_gh_x_np)
 GH_LOGW = jnp.log(jnp.array(_gh_w_np))
 
+# ---------------------------------------------------------------------------
+# Calibration spline constants  (Payne et al. 2021, arXiv:2104.14829)
+# Sigma values from arXiv:1708.03023 (O1/O2 typical: ~5% amplitude, ~3 deg phase)
+# ---------------------------------------------------------------------------
+_N_CAL   = 10
+_CAL_LOG_NODES = jnp.linspace(jnp.log(20.0), jnp.log(1024.0), _N_CAL)
+_CAL_SPACING   = _CAL_LOG_NODES[1] - _CAL_LOG_NODES[0]
+_CAL_SIGMA_A   = 0.05
+_CAL_SIGMA_PHI = jnp.deg2rad(3.0)
+
+def _cal_basis(log_freq):
+    """Tent (linear-interp) basis: shape (n_freq, n_nodes)."""
+    return jnp.maximum(
+        0., 1. - jnp.abs(log_freq[:, None] - _CAL_LOG_NODES[None, :]) / _CAL_SPACING
+    )  # (n_freq, n_nodes)
+
+def calibration_log_marginal(h, d_tilde, psd, mask, log_freq, df):
+    """
+    Analytically marginalise over calibration spline nodes in the linear approx.
+    Returns additive log-likelihood correction from one detector.
+    Amplitude and phase blocks are independent (cross-term vanishes).
+    """
+    w    = mask * 2.0 * df / psd              # (n_freq,) effective weights
+    r    = d_tilde - h                         # (n_freq,) complex residual
+    Phi  = _cal_basis(log_freq)                # (n_freq, n_nodes)
+
+    h2     = jnp.abs(h) ** 2                  # (n_freq,)
+    wh2    = w * h2                            # (n_freq,)
+    wh2Phi = wh2[:, None] * Phi               # (n_freq, n_nodes)
+    G      = Phi.T @ wh2Phi                   # (n_nodes, n_nodes) — shared Fisher
+
+    A_amp = G + jnp.eye(_N_CAL) / _CAL_SIGMA_A**2
+    A_phi = G + jnp.eye(_N_CAL) / _CAL_SIGMA_PHI**2
+
+    rh    = jnp.conj(r) * h                   # (n_freq,) complex
+    wPhi  = w[:, None] * Phi                  # (n_freq, n_nodes)
+    c_A   =  2.0 * (wPhi.T @ jnp.real(rh))   # (n_nodes,)
+    c_phi = -2.0 * (wPhi.T @ jnp.imag(rh))   # (n_nodes,)
+
+    def _log_marginal_block(A, c, sigma):
+        sol = jnp.linalg.solve(A, c)
+        return (-_N_CAL * jnp.log(sigma)
+                - 0.5 * jnp.linalg.slogdet(A)[1]
+                + 0.5 * c @ sol)
+
+    return (_log_marginal_block(A_amp, c_A,   _CAL_SIGMA_A)
+          + _log_marginal_block(A_phi, c_phi, _CAL_SIGMA_PHI))
+
 DELTA     = 4e-38
 LOG_DELTA = jnp.log(DELTA)
 
@@ -168,6 +216,7 @@ def get_ravel_order(particles_dict):
 def run_one_mode(mode):
     use_alcs = 'alcs' in mode
     use_bad  = 'bad'  in mode
+    use_cal  = 'cal'  in mode and not use_alcs and not use_bad
 
     base_keys   = ["M_c","q","s1_z","s2_z","iota","d_L","t_c","psi","ra","dec","phase_c"]
     sample_keys = (base_keys
@@ -226,6 +275,7 @@ def run_one_mode(mode):
         align_time   = jnp.exp(-1j*2*jnp.pi*frequencies*(epoch+p["t_c"]))
         df = frequencies[1] - frequencies[0]
         log_two_df_over_pi = jnp.log(2.0*df/jnp.pi)
+        log_freq = jnp.log(frequencies)
         log_L = 0.0
         for det in detectors:
             h    = det.fd_response(frequencies, waveform_sky, p) * align_time
@@ -242,6 +292,14 @@ def run_one_mode(mode):
                 bins = jax.vmap(lambda b, ls: _bad_combine(
                     _norm_single_bin(b, ls, log_two_df_over_pi),
                     p["p_anom"]))(B, logS)
+            elif use_cal:
+                bins = jax.vmap(lambda b, ls: _norm_single_bin(
+                    b, ls, log_two_df_over_pi))(B, logS)
+                log_L = (log_L
+                         + jnp.sum(bins * det.mask)
+                         + calibration_log_marginal(
+                             h, det.data, det.psd, det.mask, log_freq, df))
+                continue
             else:
                 bins = jax.vmap(lambda b, ls: _norm_single_bin(
                     b, ls, log_two_df_over_pi))(B, logS)
@@ -321,7 +379,7 @@ def run_one_mode(mode):
 # ---------------------------------------------------------------------------
 # Run all four modes in series
 # ---------------------------------------------------------------------------
-for mode in ['norm', 'bad', 'alcs_quad', 'alcs_bad_quad']:
+for mode in ['norm', 'bad', 'alcs_quad', 'alcs_bad_quad', 'cal']:
     print(f"\n{'='*60}")
     print(f"  {event_name}  |  mode = {mode}  |  dets = {[d.name for d in detectors]}")
     print(f"{'='*60}")
