@@ -1,9 +1,15 @@
 """
-GW150914 parameter estimation with sampled calibration spline parameters.
+GW150914 parameter estimation — all noise model combinations.
 
-Runs two models in series and saves both for evidence comparison:
-  norm  -- standard fixed-PSD Whittle likelihood (11 GW params)
-  cal   -- norm + calibration spline (11 + 20 = 31 params)
+Runs 8 models in series for full evidence comparison:
+  norm          -- standard fixed-PSD Whittle likelihood (11 GW params)
+  alcs          -- ALCS PSD marginalisation via GH quadrature (+tau)
+  bad           -- Bayesian Anomaly Detection mixture model (+p_anom)
+  alcs_bad      -- ALCS + BAD (+tau, +p_anom)
+  cal           -- calibration spline sampling (11 + 20 = 31 params)
+  cal_alcs      -- cal + ALCS (+tau)
+  cal_bad       -- cal + BAD (+p_anom)
+  cal_alcs_bad  -- cal + ALCS + BAD (+tau, +p_anom)
 
 Calibration model matches Romero-Shaw et al. 2020 (arXiv:2006.00714) / bilby:
   h_cal(f) = h(f) * (1 + delta_A(f)) * (2 + i*delta_phi(f)) / (2 - i*delta_phi(f))
@@ -155,53 +161,93 @@ def get_ravel_order(d):
     return order
 
 # ---------------------------------------------------------------------------
-# Per-bin Normal likelihood kernel
+# GH quadrature constants (20-point, for ALCS)
+# ---------------------------------------------------------------------------
+_gh_x_np, _gh_w_np = np.polynomial.hermite.hermgauss(20)
+GH_X    = jnp.array(_gh_x_np)
+GH_LOGW = jnp.log(jnp.array(_gh_w_np))
+
+# BAD anomaly floor
+DELTA     = 4e-38
+LOG_DELTA = jnp.log(DELTA)
+
+# ---------------------------------------------------------------------------
+# Per-bin likelihood kernels
 # ---------------------------------------------------------------------------
 def _norm_bin(B_i, log_S_i, log_two_df_over_pi):
     return log_two_df_over_pi - log_S_i - B_i * jnp.exp(-log_S_i)
 
-_norm_bins = jax.vmap(_norm_bin, in_axes=(0, 0, None))
+def _alcs_bin(B_i, log_S_i, tau, log_two_df_over_pi):
+    tau_sq = tau ** 2
+    s0 = 0.5 * log_S_i
+    s  = s0
+    for _ in range(5):
+        e2s = jnp.exp(-2.0 * s)
+        f   = -2.0 + 2.0*B_i*e2s - (s - s0)/tau_sq
+        fp  = -4.0*B_i*e2s - 1.0/tau_sq
+        s   = s - f/fp
+    H     = 4.0*B_i*jnp.exp(-2.0*s) + 1.0/tau_sq
+    scale = jnp.sqrt(2.0 / H)
+    s_nodes = s + scale * GH_X
+    g_nodes = (-2.0*s_nodes - B_i*jnp.exp(-2.0*s_nodes)
+               - (s_nodes - s0)**2 / (2.0*tau_sq))
+    log_int = jnp.log(scale) + jax.scipy.special.logsumexp(GH_LOGW + g_nodes + GH_X**2)
+    return log_two_df_over_pi - 0.5*jnp.log(2.0*jnp.pi*tau_sq) + log_int
+
+def _bad_combine(log_Z_i, p_anom):
+    return jnp.logaddexp(jnp.log1p(-p_anom) + log_Z_i, jnp.log(p_anom) - LOG_DELTA)
 
 # ---------------------------------------------------------------------------
 # Run one mode
+# mode string is any combination of 'cal', 'alcs', 'bad' joined by '_', or 'norm'
+# e.g. 'norm', 'alcs', 'bad', 'alcs_bad', 'cal', 'cal_alcs', 'cal_bad', 'cal_alcs_bad'
 # ---------------------------------------------------------------------------
 def run_mode(mode):
-    use_cal = (mode == 'cal')
-    sample_keys = GW_KEYS + (CAL_KEYS if use_cal else [])
+    use_cal  = 'cal'  in mode
+    use_alcs = 'alcs' in mode
+    use_bad  = 'bad'  in mode
+
+    sample_keys = (GW_KEYS
+                   + (["tau"]    if use_alcs else [])
+                   + (["p_anom"] if use_bad  else [])
+                   + (CAL_KEYS   if use_cal  else []))
 
     test_p      = {k: jax.random.uniform(jax.random.PRNGKey(0), (100,)) for k in sample_keys}
     sample_keys = get_ravel_order(test_p)
 
-    # Param config: GW params + (optionally) Gaussian cal params
     GW_CONFIG = {
-        "M_c":     {"min": 25.0,      "max": 50.0,       "type": "uniform",   "wrap": False},
-        "q":       {"min": 0.25,      "max": 1.0,        "type": "uniform",   "wrap": False},
-        "s1_z":    {"min": -1.0,      "max": 1.0,        "type": "uniform",   "wrap": False},
-        "s2_z":    {"min": -1.0,      "max": 1.0,        "type": "uniform",   "wrap": False},
-        "iota":    {"min": 0.0,       "max": jnp.pi,     "type": "sine",      "wrap": False},
-        "d_L":     {"min": 100.0,     "max": 5000.0,     "type": "powerlaw",  "wrap": False},
-        "t_c":     {"min": -0.1,      "max": 0.1,        "type": "uniform",   "wrap": False},
-        "phase_c": {"min": 0.0,       "max": 2*jnp.pi,   "type": "uniform",   "wrap": True},
-        "psi":     {"min": 0.0,       "max": jnp.pi,     "type": "uniform",   "wrap": True},
-        "ra":      {"min": 0.0,       "max": 2*jnp.pi,   "type": "uniform",   "wrap": True},
-        "dec":     {"min": -jnp.pi/2, "max": jnp.pi/2,   "type": "cosine",    "wrap": False},
+        "M_c":     {"min": 25.0,      "max": 50.0,       "type": "uniform",    "wrap": False},
+        "q":       {"min": 0.25,      "max": 1.0,        "type": "uniform",    "wrap": False},
+        "s1_z":    {"min": -1.0,      "max": 1.0,        "type": "uniform",    "wrap": False},
+        "s2_z":    {"min": -1.0,      "max": 1.0,        "type": "uniform",    "wrap": False},
+        "iota":    {"min": 0.0,       "max": jnp.pi,     "type": "sine",       "wrap": False},
+        "d_L":     {"min": 100.0,     "max": 5000.0,     "type": "powerlaw",   "wrap": False},
+        "t_c":     {"min": -0.1,      "max": 0.1,        "type": "uniform",    "wrap": False},
+        "phase_c": {"min": 0.0,       "max": 2*jnp.pi,   "type": "uniform",    "wrap": True},
+        "psi":     {"min": 0.0,       "max": jnp.pi,     "type": "uniform",    "wrap": True},
+        "ra":      {"min": 0.0,       "max": 2*jnp.pi,   "type": "uniform",    "wrap": True},
+        "dec":     {"min": -jnp.pi/2, "max": jnp.pi/2,   "type": "cosine",     "wrap": False},
+        "tau":     {"min": 0.001,     "max": 2.0,        "type": "log_uniform", "wrap": False},
+        "p_anom":  {"min": 1e-4,      "max": 0.5,        "type": "log_uniform", "wrap": False},
     }
-    CAL_CONFIG = {k: {"sigma": SIGMA_A   if "amplitude" in k else SIGMA_PHI,
+    CAL_CONFIG = {k: {"sigma": SIGMA_A if "amplitude" in k else SIGMA_PHI,
                       "type": "gaussian", "wrap": False}
                   for k in CAL_KEYS}
 
     cfg = {**GW_CONFIG, **(CAL_CONFIG if use_cal else {})}
     sc  = {k: cfg[k] for k in sample_keys}
 
-    type_arr  = jnp.array([0 if sc[k]["type"]=="uniform"  else
-                            1 if sc[k]["type"]=="sine"     else
-                            2 if sc[k]["type"]=="cosine"   else
-                            3 if sc[k]["type"]=="powerlaw" else
-                            4   # gaussian
-                            for k in sample_keys])
-    mins      = jnp.array([sc[k].get("min", 0.) for k in sample_keys])
-    maxs      = jnp.array([sc[k].get("max", 1.) for k in sample_keys])
-    sigmas    = jnp.array([sc[k].get("sigma", 1.) for k in sample_keys])
+    # type encoding: 0=uniform, 1=sine, 2=cosine, 3=powerlaw, 4=gaussian, 5=log_uniform
+    type_arr = jnp.array([0 if sc[k]["type"]=="uniform"     else
+                           1 if sc[k]["type"]=="sine"        else
+                           2 if sc[k]["type"]=="cosine"      else
+                           3 if sc[k]["type"]=="powerlaw"    else
+                           4 if sc[k]["type"]=="gaussian"    else
+                           5   # log_uniform
+                           for k in sample_keys])
+    mins   = jnp.array([sc[k].get("min",   0.) for k in sample_keys])
+    maxs   = jnp.array([sc[k].get("max",   1.) for k in sample_keys])
+    sigmas = jnp.array([sc[k].get("sigma", 1.) for k in sample_keys])
 
     @jax.jit
     def prior_transform_fn(u_params):
@@ -210,18 +256,25 @@ def run_mode(mode):
             jnp.where(type_arr == 1, jnp.arccos(1 - 2*u),
             jnp.where(type_arr == 2, jnp.arcsin(2*u - 1),
             jnp.where(type_arr == 3, (mins**3 + u*(maxs**3 - mins**3))**(1/3),
-                      sigmas * jax.scipy.special.ndtri(u)))))   # gaussian
+            jnp.where(type_arr == 4, sigmas * jax.scipy.special.ndtri(u),
+                      mins * (maxs/mins)**u)))))   # log_uniform
         _, unf = jax.flatten_util.ravel_pytree({k: 0. for k in sample_keys})
         return unf(x)
 
     @jax.jit
     def logprior_fn(params):
         vals, _ = jax.flatten_util.ravel_pytree(params)
-        lp = jnp.where(type_arr == 0, jnp.where((vals>=mins)&(vals<=maxs), -jnp.log(maxs-mins), -jnp.inf),
-             jnp.where(type_arr == 1, jnp.where((vals>=0)&(vals<=jnp.pi), jnp.log(jnp.sin(vals)/2), -jnp.inf),
-             jnp.where(type_arr == 2, jnp.where(jnp.abs(vals)<jnp.pi/2, jnp.log(jnp.cos(vals)/2), -jnp.inf),
-             jnp.where(type_arr == 3, 2*jnp.log(vals) - jnp.log(maxs**3 - mins**3),
-                       -vals**2/(2*sigmas**2) - jnp.log(sigmas) - 0.5*jnp.log(2*jnp.pi)))))
+        lp = jnp.where(type_arr == 0,
+                       jnp.where((vals>=mins)&(vals<=maxs), -jnp.log(maxs-mins), -jnp.inf),
+             jnp.where(type_arr == 1,
+                       jnp.where((vals>=0)&(vals<=jnp.pi), jnp.log(jnp.sin(vals)/2), -jnp.inf),
+             jnp.where(type_arr == 2,
+                       jnp.where(jnp.abs(vals)<jnp.pi/2, jnp.log(jnp.cos(vals)/2), -jnp.inf),
+             jnp.where(type_arr == 3,
+                       2*jnp.log(vals) - jnp.log(maxs**3 - mins**3),
+             jnp.where(type_arr == 4,
+                       -vals**2/(2*sigmas**2) - jnp.log(sigmas) - 0.5*jnp.log(2*jnp.pi),
+                       -jnp.log(vals) - jnp.log(jnp.log(maxs/mins)))))))  # log_uniform
         return jnp.sum(lp)
 
     def loglikelihood_fn(params):
@@ -239,8 +292,23 @@ def run_mode(mode):
                 dA  = jnp.array([p[f"{det.name}_amplitude_{j}"] for j in range(N_CAL_NODES)])
                 dph = jnp.array([p[f"{det.name}_phase_{j}"]     for j in range(N_CAL_NODES)])
                 h   = apply_calibration(h, log_freq, dA, dph)
-            B     = 2.0 * df * jnp.abs(det.data - h)**2
-            log_L = log_L + jnp.dot(_norm_bins(B, jnp.log(det.psd), log_two_df_over_pi), det.mask)
+            B    = 2.0 * df * jnp.abs(det.data - h)**2
+            logS = jnp.log(det.psd)
+            if use_alcs and use_bad:
+                bins = jax.vmap(lambda b, ls: _bad_combine(
+                    _alcs_bin(b, ls, p["tau"], log_two_df_over_pi),
+                    p["p_anom"]))(B, logS)
+            elif use_alcs:
+                bins = jax.vmap(lambda b, ls: _alcs_bin(
+                    b, ls, p["tau"], log_two_df_over_pi))(B, logS)
+            elif use_bad:
+                bins = jax.vmap(lambda b, ls: _bad_combine(
+                    _norm_bin(b, ls, log_two_df_over_pi),
+                    p["p_anom"]))(B, logS)
+            else:
+                bins = jax.vmap(lambda b, ls: _norm_bin(
+                    b, ls, log_two_df_over_pi))(B, logS)
+            log_L = log_L + jnp.dot(bins, det.mask)
         return log_L
 
     # Nested sampling
@@ -282,6 +350,9 @@ def run_mode(mode):
         dlogz = jnp.logaddexp(0, state.logZ_live - state.logZ)
         return jnp.isfinite(dlogz) and dlogz < 0.1
 
+    from blackjax.ns.utils import finalise
+    from anesthetic import NestedSamples
+
     dead = []
     with tqdm.tqdm(desc=f"GW150914 {mode}", unit=" dead points") as pbar:
         while not terminate(state):
@@ -289,19 +360,17 @@ def run_mode(mode):
             dead.append(dead_info)
             pbar.update(n_delete)
 
-    from blackjax.ns.utils import finalise
-    from anesthetic import NestedSamples
-
-    final_state      = finalise(state, dead)
-    physical_params  = transform_to_physical(final_state.particles, prior_transform_fn)
-    logL_birth       = jnp.where(jnp.isnan(final_state.loglikelihood_birth),
-                                  -jnp.inf, final_state.loglikelihood_birth)
+    final_state     = finalise(state, dead)
+    physical_params = transform_to_physical(final_state.particles, prior_transform_fn)
+    logL_birth      = jnp.where(jnp.isnan(final_state.loglikelihood_birth),
+                                 -jnp.inf, final_state.loglikelihood_birth)
 
     labels = {
         "M_c": r"$\mathcal{M}_c$", "q": r"$q$", "d_L": r"$d_L$",
         "iota": r"$\iota$", "ra": r"$\alpha$", "dec": r"$\delta$",
         "s1_z": r"$\chi_1$", "s2_z": r"$\chi_2$", "t_c": r"$t_c$",
         "psi": r"$\psi$", "phase_c": r"$\phi_c$",
+        "tau": r"$\tau$", "p_anom": r"$p_{\rm anom}$",
         **{k: k for k in CAL_KEYS},
     }
 
@@ -313,14 +382,27 @@ def run_mode(mode):
     samples.to_csv(f"blackjaxns_cal_gw150914_{mode}.csv")
     with open(f"blackjaxns_cal_gw150914_{mode}_final_state.pkl", "wb") as f:
         pickle.dump(final_state, f)
-    print(f"  [{mode}]  logZ = {samples.logZ():.2f}  (n_params = {len(sample_keys)})")
-    return samples.logZ()
+    logZ_val = samples.logZ()
+    print(f"  [{mode:15s}]  logZ = {logZ_val:.2f}  (n_params = {len(sample_keys)})")
+    return logZ_val
 
 # ---------------------------------------------------------------------------
-# Run both models
+# Run cal and cal_alcs_bad, skipping cal if results already exist
 # ---------------------------------------------------------------------------
-logZ_norm = run_mode('norm')
-logZ_cal  = run_mode('cal')
+results = {}
 
-print(f"\nlog Bayes factor  cal vs norm:  {logZ_cal - logZ_norm:.2f} nats")
-print(f"  (positive = data prefers calibration marginalisation)")
+for mode in ['cal', 'cal_alcs_bad']:
+    csv_path = f"blackjaxns_cal_gw150914_{mode}.csv"
+    if os.path.exists(csv_path):
+        from anesthetic import NestedSamples
+        import pandas as pd
+        samples = NestedSamples(pd.read_csv(csv_path, index_col=0))
+        results[mode] = samples.logZ()
+        print(f"  [{mode:15s}]  logZ = {results[mode]:.2f}  (loaded from {csv_path})")
+    else:
+        print(f"\n{'='*60}")
+        print(f"  GW150914  |  mode = {mode}")
+        print(f"{'='*60}")
+        results[mode] = run_mode(mode)
+
+print(f"\nlog Bayes factor  cal_alcs_bad vs cal:  {results['cal_alcs_bad'] - results['cal']:+.2f} nats")
