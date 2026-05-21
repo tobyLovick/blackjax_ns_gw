@@ -351,7 +351,7 @@ def run_mode(mode):
         return jnp.isfinite(dlogz) and dlogz < 0.1
 
     from blackjax.ns.utils import finalise
-    from anesthetic import NestedSamples
+    from anesthetic import NestedSamples, read_chains
 
     dead = []
     with tqdm.tqdm(desc=f"GW150914 {mode}", unit=" dead points") as pbar:
@@ -379,10 +379,11 @@ def run_mode(mode):
         logL_birth=logL_birth, labels=labels,
         logzero=jnp.nan, dtype=jnp.float64,
     )
-    samples.to_csv(f"blackjaxns_cal_gw150914_{mode}.csv")
+    csv_path = f"blackjaxns_cal_gw150914_{mode}.csv"
+    samples.to_csv(csv_path)
     with open(f"blackjaxns_cal_gw150914_{mode}_final_state.pkl", "wb") as f:
         pickle.dump(final_state, f)
-    logZ_val = samples.logZ()
+    logZ_val = read_chains(csv_path).logZ()
     print(f"  [{mode:15s}]  logZ = {logZ_val:.2f}  (n_params = {len(sample_keys)})")
     return logZ_val
 
@@ -394,10 +395,8 @@ results = {}
 for mode in ['cal', 'cal_alcs_bad']:
     csv_path = f"blackjaxns_cal_gw150914_{mode}.csv"
     if os.path.exists(csv_path):
-        from anesthetic import NestedSamples
-        import pandas as pd
-        samples = NestedSamples(pd.read_csv(csv_path, index_col=0))
-        results[mode] = samples.logZ()
+        from anesthetic import read_chains
+        results[mode] = read_chains(csv_path).logZ()
         print(f"  [{mode:15s}]  logZ = {results[mode]:.2f}  (loaded from {csv_path})")
     else:
         print(f"\n{'='*60}")
