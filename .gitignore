@@ -68,3 +68,8 @@ src/*
 !src/gw150914_notch_mask_*.npy
 
 # Result CSVs are local-only — do not add .csv exceptions here
+
+# PP test and injection catalogs (needed on Isambard)
+!src/pp_catalog.npy
+!src/pp_catalog_arr.npy
+!src/injection_catalog.npy
