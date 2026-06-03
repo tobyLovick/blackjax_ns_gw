@@ -72,11 +72,9 @@ for i in range(args.n):
                 q_event[mi, pi] = get_quantile(
                     s[param].values, w, true_vals[param])
 
-            if 'tau' in mode:   # alcs modes only
+            if 'alcs' in mode:   # tau only sampled in alcs modes
                 tau_idx = MODES.index(mode) - 2   # 0=alcs_true, 1=alcs_welch
-                tau_median[tau_idx] if False else None  # initialised below
-                tau_ev[MODES.index(mode) - 2] = float(np.average(
-                    s['tau'].values, weights=w))
+                tau_ev[tau_idx] = float(np.average(s['tau'].values, weights=w))
 
             logZ_ev[mi] = float(s.logZ(1000).mean())
 

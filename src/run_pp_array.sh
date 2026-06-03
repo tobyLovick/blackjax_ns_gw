@@ -7,7 +7,7 @@ CONDA_ENV="lao"
 source ~/miniforge3/bin/activate
 conda activate "${CONDA_ENV}"
 
-SRC="$(cd "$(dirname "$0")" && pwd)"
+SRC="${SLURM_SUBMIT_DIR}"
 
 echo "========================================"
 echo "Job ID:       ${SLURM_JOB_ID}"
