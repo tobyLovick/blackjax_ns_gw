@@ -1,6 +1,7 @@
 #!/bin/bash
+#SBATCH --output=logs/pp_%A_%a.out
+#SBATCH --error=logs/pp_%A_%a.err
 # SLURM array job script for PP test.
-# Submitted by submit_pp.sh — do not call directly.
 
 CONDA_ENV="lao"
 
