@@ -1,4 +1,8 @@
 #!/bin/bash
+#SBATCH --partition=workq
+#SBATCH --gpus=1
+#SBATCH --time=04:00:00
+#SBATCH --job-name=pp_test
 #SBATCH --output=logs/pp_%A_%a.out
 #SBATCH --error=logs/pp_%A_%a.err
 # SLURM array job script for PP test.
