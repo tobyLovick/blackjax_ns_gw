@@ -50,6 +50,9 @@ grp.add_argument('--idx', type=int,
                  help='Catalog index (for SLURM array jobs)')
 parser.add_argument('--catalog', default='o3_catalog.npy',
                     help='Path to catalog .npy (default o3_catalog.npy)')
+parser.add_argument('--psd-suffix', type=str, default='',
+                    help='Override Welch PSD with {event}_{det}_psd{suffix}.npy, '
+                         'e.g. --psd-suffix _bayeswave')
 args = parser.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -106,6 +109,14 @@ for det in detectors:
     det.data = jnp.array(det.data,  dtype=jnp.complex128)
     det.psd  = jnp.array(det.psd,   dtype=jnp.float64)
     det.mask = jnp.ones(len(frequencies), dtype=jnp.float64)
+
+# Override Welch PSD with external estimate (e.g. BayesWave) if requested
+if args.psd_suffix:
+    for det in detectors:
+        psd_path = f'{name}_{det.name}_psd{args.psd_suffix}.npy'
+        ext_psd = jnp.array(np.load(psd_path), dtype=jnp.float64)
+        det.psd = ext_psd
+        print(f"  Loaded external PSD for {det.name}: {psd_path}")
 
 waveform = RippleIMRPhenomD(f_ref=20)
 post_trigger_duration = 2
