@@ -4,8 +4,8 @@
 Usage:
   python blackjaxns_o4_analysis.py --event-idx 0 --event-list o4_event_list.json
 
-Reads pre-prepared data from  o4_data/{event_name}/
-Writes results to             o4_results/{event_name}/{mode}.csv
+Downloads strain + PSDs on demand (if not already cached in o4_data/{event_name}/).
+Writes results to o4_results/{event_name}/{mode}.csv
 
 Skips any mode whose CSV already exists.
 """
@@ -14,7 +14,7 @@ import os
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-import argparse, json, pickle, sys
+import argparse, json, pickle, sys, time, random
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -75,6 +75,73 @@ def get_ravel_order(d):
             if abs(v - tv) < 1e-10:
                 order.append(k); break
     return order
+
+# ---------------------------------------------------------------------------
+# Data preparation (inline, so nodes don't need a separate prep step)
+# ---------------------------------------------------------------------------
+def prepare_data_if_needed(event_cfg):
+    """Download strain + PSDs for this event if not already cached."""
+    import o4_data_prep as prep
+
+    name     = event_cfg['name']
+    data_dir = os.path.join('o4_data', name)
+
+    if os.path.exists(os.path.join(data_dir, 'detectors.json')):
+        print(f"  Data already cached for {name}")
+        return
+    if os.path.exists(os.path.join(data_dir, 'INSUFFICIENT_DETECTORS')):
+        return
+
+    # Stagger 167 simultaneous job starts so GWOSC/Zenodo aren't hammered
+    delay = random.uniform(0, 120)
+    print(f"  Staggering download by {delay:.0f}s ...", flush=True)
+    time.sleep(delay)
+
+    os.makedirs(data_dir, exist_ok=True)
+    freqs_analysis, freqs_mask = prep.make_analysis_freqs()
+
+    freq_path = os.path.join(data_dir, 'frequencies.npy')
+    if not os.path.exists(freq_path):
+        np.save(freq_path, freqs_analysis)
+
+    gps       = event_cfg['gps']
+    gps_start = gps - prep.DOWNLOAD_DURATION / 2
+    gps_end   = gps + prep.DOWNLOAD_DURATION / 2
+    active_dets = []
+
+    for det in prep.DETECTORS:
+        strain_path = os.path.join(data_dir, f'{det}_strain.npy')
+        welch_path  = os.path.join(data_dir, f'{det}_psd_welch.npy')
+        if os.path.exists(strain_path) and os.path.exists(welch_path):
+            active_dets.append(det)
+            continue
+        ts = prep.download_strain(det, gps_start, gps_end)
+        if ts is None:
+            continue
+        np.save(strain_path, prep.extract_on_source_fft(ts, gps, freqs_mask))
+        np.save(welch_path,  prep.compute_welch_psd(ts, gps, freqs_analysis))
+        active_dets.append(det)
+        print(f"  {det}: strain + Welch saved", flush=True)
+
+    if len(active_dets) < 2:
+        print(f"  SKIP {name}: only {len(active_dets)} detector(s)")
+        open(os.path.join(data_dir, 'INSUFFICIENT_DETECTORS'), 'w').close()
+        return
+
+    missing_bw = [d for d in active_dets
+                  if not os.path.exists(os.path.join(data_dir, f'{d}_psd_bw.npy'))]
+    if missing_bw:
+        bw_psds, _ = prep.download_bw_psd(
+            event_cfg['hdf5_url'], name, active_dets, freqs_analysis)
+        for det, psd in bw_psds.items():
+            np.save(os.path.join(data_dir, f'{det}_psd_bw.npy'), psd)
+            print(f"  {det}: BayesWave PSD saved", flush=True)
+        active_dets = [d for d in active_dets if d in bw_psds]
+
+    with open(os.path.join(data_dir, 'detectors.json'), 'w') as f:
+        json.dump(active_dets, f)
+    print(f"  Data prep complete: {name}  detectors={active_dets}", flush=True)
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -258,11 +325,10 @@ def main():
     out_dir   = os.path.join('o4_results', name)
     os.makedirs(out_dir, exist_ok=True)
 
-    # Check data was prepared
+    # Download strain + PSDs if not already cached
+    prepare_data_if_needed(event_cfg)
     if os.path.exists(os.path.join(data_dir, 'INSUFFICIENT_DETECTORS')):
         print(f"SKIP {name}: insufficient detectors"); sys.exit(0)
-    if not os.path.exists(os.path.join(data_dir, 'frequencies.npy')):
-        print(f"ERROR: data not prepared for {name}. Run o4_data_prep.py first."); sys.exit(1)
 
     with open(os.path.join(data_dir, 'detectors.json')) as f:
         det_names = json.load(f)

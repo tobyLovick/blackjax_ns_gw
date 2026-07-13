@@ -6,9 +6,9 @@
 #SBATCH --output=logs/o4_%A_%a.out
 #SBATCH --error=logs/o4_%A_%a.err
 # Array index set at submission time:
-#   sbatch --array=0-187 submit_o4_array.sh
+#   sbatch --array=0-166 submit_o4_array.sh
 # or a subset:
-#   sbatch --array=0-49 submit_o4_array.sh
+#   sbatch --array=0-4 submit_o4_array.sh
 
 CONDA_ENV="lao"
 
