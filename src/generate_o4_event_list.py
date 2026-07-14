@@ -73,9 +73,16 @@ def main():
             dl_median = ev.get("luminosity_distance") or 500.0
             snr       = ev.get("network_matched_filter_snr") or 0.0
 
-            # Prior bounds — wide enough to bracket posterior
-            mc_lo = max(1.0,  mc_det * 0.45)
-            mc_hi = min(500., mc_det * 2.5)
+            # Prior bounds — use detector-frame Mc, fall back to source-frame
+            mc_ref = mc_det if mc_det > 0 else mc_src
+            if mc_ref <= 0:
+                print(f"  WARNING: no chirp mass for {base_name}, skipping")
+                continue
+            mc_lo = max(1.0,  mc_ref * 0.45)
+            mc_hi = min(500., mc_ref * 2.5)
+            if mc_lo >= mc_hi:
+                print(f"  WARNING: bad Mc prior [{mc_lo},{mc_hi}] for {base_name}, skipping")
+                continue
             dl_lo = max(50.,  dl_median * 0.1)
             dl_hi = min(20000., dl_median * 5.0)
 

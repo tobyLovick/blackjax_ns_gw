@@ -11,17 +11,25 @@ Run on a login node (needs internet). Can be arrayed:
   python o4_data_prep.py --event-idx $SLURM_ARRAY_TASK_ID --event-list o4_event_list.json
 """
 
-import os, sys, json, argparse, shutil
+import os, sys, json, argparse, shutil, time
 import numpy as np
 import urllib.request
 import tempfile
 import scipy.signal
 
+
+def _mb(path):
+    return os.path.getsize(path) / 1e6
+
+
+def _t(label, t0):
+    print(f"    {label}: {time.time()-t0:.1f}s", flush=True)
+
 SAMPLE_RATE       = 4096    # Hz
 DURATION          = 4       # s — on-source segment
 POST_TRIGGER      = 2       # s after GPS trigger
 F_LOW             = 20.0
-F_HIGH            = 1024.0
+F_HIGH            = 512.0
 DOWNLOAD_DURATION = 64      # s of strain to download for Welch PSD
 
 DETECTORS = ['H1', 'L1', 'V1']   # K1 not in jimgw 0.2.0; require ≥2 of these
@@ -56,10 +64,13 @@ def make_analysis_freqs():
 
 def download_strain(det_name, gps_start, gps_end):
     from gwpy.timeseries import TimeSeries
-    print(f"  Downloading {det_name} strain {gps_start:.1f}--{gps_end:.1f} ...", flush=True)
+    print(f"  [{det_name}] Downloading {DOWNLOAD_DURATION}s strain ...", flush=True)
+    t0 = time.time()
     try:
         ts = TimeSeries.fetch_open_data(det_name, gps_start, gps_end,
                                         sample_rate=SAMPLE_RATE, cache=False)
+        nbytes = ts.value.nbytes
+        _t(f"done  ({nbytes/1e6:.1f} MB in memory)", t0)
         return ts
     except Exception as e:
         print(f"  WARNING: could not download {det_name}: {e}")
@@ -112,26 +123,37 @@ def download_bw_psd(hdf5_url, event_name, detectors, freqs_analysis):
     import h5py
 
     tmpfile = tempfile.mktemp(suffix='.hdf5', prefix=f'gwtc5_{event_name}_')
-    print(f"  Downloading BayesWave HDF5 ({hdf5_url.split('/')[-2]}) ...", flush=True)
+    print(f"  Downloading BayesWave HDF5 ...", flush=True)
+    t0 = time.time()
     urllib.request.urlretrieve(hdf5_url, tmpfile)
+    hdf5_mb = _mb(tmpfile)
+    _t(f"done  ({hdf5_mb:.1f} MB)", t0)
 
     bw_psds = {}
     try:
         with h5py.File(tmpfile, 'r') as f:
-            # Use first available approximant label
             labels = [k for k in f.keys() if k not in ('history', 'version')]
             label  = labels[0]
             avail_dets = list(f[f'{label}/psds'].keys())
+            print(f"  HDF5 label: {label}  |  PSDs available: {avail_dets}", flush=True)
             for det in detectors:
                 if det not in avail_dets:
-                    print(f"  WARNING: {det} not in BW PSD for {event_name} (have {avail_dets})")
+                    print(f"  WARNING: {det} not in BW PSD (have {avail_dets})")
                     continue
                 raw = f[f'{label}/psds/{det}'][:]
-                f_bw  = raw[:, 0]
+                f_bw   = raw[:, 0]
                 psd_bw = raw[:, 1]
-                bw_psds[det] = np.interp(freqs_analysis, f_bw, psd_bw)
+                # Strip sentinel/garbage values (last row is often a placeholder)
+                valid = (psd_bw > 0) & (psd_bw < 1e-20)
+                f_bw, psd_bw = f_bw[valid], psd_bw[valid]
+                f_min_bw, f_max_bw = f_bw[0], f_bw[-1]
+                print(f"  {det}: BW PSD valid range {f_min_bw:.1f}--{f_max_bw:.1f} Hz  "
+                      f"({len(f_bw)} bins, {raw.nbytes/1e3:.1f} kB raw)", flush=True)
+                bw_psds[det] = np.interp(freqs_analysis, f_bw, psd_bw,
+                                         left=psd_bw[0], right=psd_bw[-1])
     finally:
         os.remove(tmpfile)
+        print(f"  HDF5 deleted  (kept {sum(v.nbytes for v in bw_psds.values())/1e3:.1f} kB of PSDs)", flush=True)
 
     return bw_psds, avail_dets
 
@@ -176,7 +198,8 @@ def main():
         np.save(strain_path, strain_fft)
         np.save(welch_path, psd_welch)
         active_dets.append(det)
-        print(f"  {det}: strain + Welch saved")
+        print(f"  {det}: strain ({_mb(strain_path)*1e3:.1f} kB) + "
+              f"Welch PSD ({_mb(welch_path)*1e3:.1f} kB) saved", flush=True)
 
     if len(active_dets) < 2:
         print(f"  SKIP {name}: only {len(active_dets)} detector(s) available ({active_dets})")
