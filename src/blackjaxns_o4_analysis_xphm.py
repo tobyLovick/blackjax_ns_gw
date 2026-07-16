@@ -331,7 +331,7 @@ def main():
     name      = event_cfg['name']
     gps       = event_cfg['gps']
     data_dir  = os.path.join('o4_data', name)
-    out_dir   = os.path.join('o4_results', name)
+    out_dir   = os.path.join('o4_results_xphm', name)
     os.makedirs(out_dir, exist_ok=True)
 
     # Download strain + PSDs if not already cached
